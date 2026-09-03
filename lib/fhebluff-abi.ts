@@ -1,6 +1,7 @@
 export const fheBluffAbi = [
   { type:'function', name:'tableCount', stateMutability:'view', inputs:[], outputs:[{type:'uint256'}] },
   { type:'function', name:'credits', stateMutability:'view', inputs:[{name:'player',type:'address'}], outputs:[{type:'uint256'}] },
+  { type:'function', name:'leaderboard', stateMutability:'view', inputs:[{name:'limit',type:'uint256'}], outputs:[{name:'players',type:'address[]'},{name:'totals',type:'uint256[]'}] },
   { type:'function', name:'createTable', stateMutability:'nonpayable', inputs:[{name:'maxPlayers',type:'uint8'},{name:'smallBlind',type:'uint96'},{name:'minBuyIn',type:'uint96'}], outputs:[{name:'tableId',type:'uint256'}] },
   { type:'function', name:'joinTable', stateMutability:'nonpayable', inputs:[{name:'tableId',type:'uint256'},{name:'buyIn',type:'uint96'}], outputs:[] },
   { type:'function', name:'leaveTable', stateMutability:'nonpayable', inputs:[{name:'tableId',type:'uint256'}], outputs:[] },

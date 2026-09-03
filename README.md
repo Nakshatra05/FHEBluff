@@ -7,7 +7,8 @@
 ## Live deployment
 
 - Network: Arbitrum Sepolia (`421614`)
-- Contract: [`0x451129A7c0B0C5AEeE67245e5e4fa1e3C4d09E18`](https://sepolia.arbiscan.io/address/0x451129A7c0B0C5AEeE67245e5e4fa1e3C4d09E18)
+- Contract: [`0x155e95b2375d90d545629768B7a89D8f08ce1822`](https://sepolia.arbiscan.io/address/0x155e95b2375d90d545629768B7a89D8f08ce1822)
+- Verified source: [Sourcify exact creation and runtime match](https://repo.sourcify.dev/421614/0x155e95b2375d90d545629768B7a89D8f08ce1822)
 - Seeded lobby: Table `#0`, six seats, 10/20 blinds, 1,000 minimum buy-in
 - CoFHE client / React SDK: `0.7.1`
 - CoFHE contracts: `0.2.0`
@@ -55,7 +56,7 @@ Set the public browser variables in `.env.local`:
 ```env
 NEXT_PUBLIC_PRIVY_APP_ID=your-privy-app-id
 NEXT_PUBLIC_ARBITRUM_SEPOLIA_RPC_URL=https://sepolia-rollup.arbitrum.io/rpc
-NEXT_PUBLIC_FHEBLUFF_CONTRACT_ADDRESS=0x451129A7c0B0C5AEeE67245e5e4fa1e3C4d09E18
+NEXT_PUBLIC_FHEBLUFF_CONTRACT_ADDRESS=0x155e95b2375d90d545629768B7a89D8f08ce1822
 ```
 
 The deployer key is server/CLI-only. Never prefix it with `NEXT_PUBLIC_`, commit it, or put it in frontend code:
@@ -74,11 +75,14 @@ npm run lint
 npm run build
 npm run contracts:compile
 npm run contracts:test
+npm run smoke:arb-sepolia
 npm run deploy:arb-sepolia
 npm run seed:arb-sepolia
 ```
 
-Hardhat uses the official CoFHE Arbitrum Sepolia preset. Contract tests run against the CoFHE mock environment and include owner-only decryption, rejected unauthorized decryption, encrypted multi-party entropy, and uniqueness checks after encrypted dealing.
+Hardhat uses the official CoFHE Arbitrum Sepolia preset. Contract tests run against the CoFHE mock environment and cover owner-only decryption, rejected unauthorized decryption, encrypted multi-party entropy, unique dealing, host reassignment, abandonment, single settlement, multiple all-ins, side pots, and chip conservation.
+
+`smoke:arb-sepolia` creates a temporary two-wallet table on the deployed contract, submits independently encrypted entropy, advances the real encrypted shuffle, verifies that cross-player decryption is rejected, and settles the hand through CoFHE threshold decryption. It requires the server-only variables `PRIVATE_KEY` and `FHEBLUFF_CONTRACT_ADDRESS`; the generated guest key exists only for that process.
 
 ## Privacy and operational notes
 

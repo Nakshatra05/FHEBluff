@@ -4,6 +4,24 @@ const { Encryptable, FheTypes } = require('@cofhe/sdk');
 
 describe('FHEBluff', function () {
   this.timeout(180000);
+
+  async function deal(game, players, values = []) {
+    const address = await game.getAddress();
+    const clients = [];
+    for (let i = 0; i < players.length; i++) {
+      const client = await hre.cofhe.createClientWithBatteries(players[i]);
+      clients.push(client);
+      const [handle, proof] = await client.encryptInputs([Encryptable.uint128(BigInt(values[i] ?? i + 1))]).setConsumingContract(address).execute();
+      await game.connect(players[i]).submitEntropy(0, handle, proof);
+    }
+    while ((await game.getShuffleProgress(0)) > 0n) await game.advanceShuffle(0, 2);
+    return clients;
+  }
+
+  async function revealPublic(client, handles) {
+    const results = await Promise.all(handles.map((handle) => client.decryptForTx(handle).withoutACP().execute()));
+    return [results.map((result) => Number(result.decryptedValue)), results.map((result) => result.signature)];
+  }
   it('enforces seating, host start, and turn guards', async function () {
     const [host, alice, outsider] = await hre.ethers.getSigners();
     const game = await (await hre.ethers.getContractFactory('FHEBluff')).deploy();
@@ -55,5 +73,73 @@ describe('FHEBluff', function () {
     ];
     expect(new Set(cards.map(String)).size).to.equal(4);
     await expect(bobClient.decryptForView(aliceHandles[0], FheTypes.Uint8).execute()).to.be.rejected;
+  });
+
+  it('reassigns a departed host and abandons an empty table', async function () {
+    const [host, alice] = await hre.ethers.getSigners();
+    const game = await (await hre.ethers.getContractFactory('FHEBluff')).deploy();
+    await game.createTable(2, 10, 1000);
+    await game.connect(host).joinTable(0, 1000);
+    await game.connect(alice).joinTable(0, 1000);
+    await game.connect(host).leaveTable(0);
+    expect((await game.getTableView(0))[0]).to.equal(alice.address);
+    await game.connect(alice).leaveTable(0);
+    expect((await game.getTableView(0))[5]).to.equal(8n);
+  });
+
+  it('settles an uncontested pot once and awards only the winner', async function () {
+    const [host, alice] = await hre.ethers.getSigners();
+    const game = await (await hre.ethers.getContractFactory('FHEBluff')).deploy();
+    await game.createTable(2, 10, 1000);
+    await game.connect(host).joinTable(0, 1000);
+    await game.connect(alice).joinTable(0, 1000);
+    await game.startHand(0);
+    await deal(game, [host, alice]);
+    const actingSeat = Number((await game.getTableView(0))[9]);
+    const seats = await game.getSeats(0);
+    const actor = seats[0][actingSeat] === host.address ? host : alice;
+    const winner = actor.address === host.address ? alice : host;
+    await game.connect(actor).act(0, 0, 0);
+    expect((await game.getTableView(0))[5]).to.equal(7n);
+    expect(await game.credits(winner.address)).to.equal(1n);
+    expect(await game.credits(actor.address)).to.equal(0n);
+    await expect(game.connect(actor).act(0, 0, 0)).to.be.revertedWithCustomError(game, 'InvalidPhase');
+  });
+
+  it('runs multiple all-ins through public streets, side pots, and showdown without losing chips', async function () {
+    const [host, alice, bob] = await hre.ethers.getSigners();
+    const players = [host, alice, bob];
+    const game = await (await hre.ethers.getContractFactory('FHEBluff')).deploy();
+    await game.createTable(3, 10, 1000);
+    await game.connect(host).joinTable(0, 1000);
+    await game.connect(alice).joinTable(0, 1500);
+    await game.connect(bob).joinTable(0, 2000);
+    await game.startHand(0);
+    const clients = await deal(game, players, [111, 222, 333]);
+
+    for (let turn = 0; turn < 3; turn++) {
+      const view = await game.getTableView(0);
+      const seats = await game.getSeats(0);
+      const actorAddress = seats[0][Number(view[9])];
+      const actor = players.find((player) => player.address === actorAddress);
+      await game.connect(actor).act(0, 4, 0);
+    }
+    expect((await game.getTableView(0))[5]).to.equal(3n);
+
+    for (const expectedPhase of [4n, 5n, 6n]) {
+      const handles = await game.getCommunityHandles(0);
+      const [values, signatures] = await revealPublic(clients[0], handles);
+      await game.publishCommunity(0, values, signatures);
+      expect((await game.getTableView(0))[5]).to.equal(expectedPhase);
+    }
+
+    const showdownHandles = await game.getShowdownHandles(0);
+    const [values, signatures] = await revealPublic(clients[0], showdownHandles);
+    await game.settleShowdown(0, values, signatures);
+    const seats = await game.getSeats(0);
+    expect(seats[1].reduce((total, stack) => total + stack, 0n)).to.equal(4500n);
+    expect((await game.getTableView(0))[5]).to.equal(7n);
+    expect((await game.leaderboard(10))[0].length).to.be.greaterThan(0);
+    await expect(game.settleShowdown(0, values, signatures)).to.be.revertedWithCustomError(game, 'InvalidPhase');
   });
 });

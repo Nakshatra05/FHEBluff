@@ -13,6 +13,7 @@
     "contracts:test": "hardhat test",
     "deploy:arb-sepolia": "hardhat run scripts/deploy.cjs --network arb-sepolia",
     "seed:arb-sepolia": "hardhat run scripts/seed-table.cjs --network arb-sepolia",
+    "smoke:arb-sepolia": "node scripts/live-smoke.mjs",
     "lint": "oxlint",
     "format": "oxfmt"
   },
