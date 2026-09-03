@@ -91,7 +91,11 @@ export default function PokerApp() {
           </div>
 
           <Tabs value={appView} onValueChange={value=>setAppView(value as AppView)}>
-            <TabsList className="grid h-auto w-full grid-cols-3 rounded-none border-3 border-ink bg-white p-1 shadow-hard-sm sm:inline-grid sm:w-auto"><TabsTrigger value="tables" className="min-h-11 rounded-none px-1 py-3 text-[11px] font-black sm:px-5 sm:text-sm data-[state=active]:bg-pink">OPEN TABLES</TabsTrigger><TabsTrigger value="leaderboard" className="min-h-11 rounded-none px-1 py-3 text-[11px] font-black sm:px-5 sm:text-sm data-[state=active]:bg-acid">LEADERBOARD</TabsTrigger><TabsTrigger value="privacy" className="min-h-11 rounded-none px-1 py-3 text-[11px] font-black sm:px-5 sm:text-sm data-[state=active]:bg-green">PRIVACY</TabsTrigger></TabsList>
+            <TabsList className="grid h-auto! w-full grid-cols-3 rounded-none border-3 border-ink bg-white p-1 shadow-hard-sm sm:inline-grid sm:w-auto">
+              <TabsTrigger value="tables" className="min-h-11 rounded-none px-1 py-3 text-[11px] font-black data-active:bg-pink sm:px-5 sm:text-sm">OPEN TABLES</TabsTrigger>
+              <TabsTrigger value="leaderboard" className="min-h-11 rounded-none px-1 py-3 text-[11px] font-black data-active:bg-acid sm:px-5 sm:text-sm">LEADERBOARD</TabsTrigger>
+              <TabsTrigger value="privacy" className="min-h-11 rounded-none px-1 py-3 text-[11px] font-black data-active:bg-green sm:px-5 sm:text-sm">PRIVACY</TabsTrigger>
+            </TabsList>
             <TabsContent value="tables" className="mt-5">
               {!contractReady ? <Empty icon={X} title="CONTRACT NOT CONFIGURED" body="Set NEXT_PUBLIC_FHEBLUFF_CONTRACT_ADDRESS to the deployed Arbitrum Sepolia contract. No demo tables are substituted for chain state." /> : rows.length===0 ? <Empty icon={Spade} title="THE FELT IS QUIET" body="No tables exist yet. Connect a wallet and create the first verifiable game." /> : <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">{rows.map(({id,data})=><TableCard key={id.toString()} id={id} data={data!} onOpen={()=>setSelected(id)} />)}</div>}
             </TabsContent>
