@@ -7,8 +7,8 @@
 ## Live deployment
 
 - Network: Arbitrum Sepolia (`421614`)
-- Contract: [`0x155e95b2375d90d545629768B7a89D8f08ce1822`](https://sepolia.arbiscan.io/address/0x155e95b2375d90d545629768B7a89D8f08ce1822)
-- Verified source: [Sourcify exact creation and runtime match](https://repo.sourcify.dev/421614/0x155e95b2375d90d545629768B7a89D8f08ce1822)
+- Contract: [`0x8571285D4cc5e7C3bc52Ee642962af8b4e35c48D`](https://sepolia.arbiscan.io/address/0x8571285D4cc5e7C3bc52Ee642962af8b4e35c48D)
+- Verified source: [Sourcify exact creation and runtime match](https://repo.sourcify.dev/421614/0x8571285D4cc5e7C3bc52Ee642962af8b4e35c48D)
 - Seeded lobby: Table `#0`, six seats, 10/20 blinds, 1,000 minimum buy-in
 - CoFHE client / React SDK: `0.7.1`
 - CoFHE contracts: `0.2.0`
@@ -56,7 +56,7 @@ Set the public browser variables in `.env.local`:
 ```env
 NEXT_PUBLIC_PRIVY_APP_ID=your-privy-app-id
 NEXT_PUBLIC_ARBITRUM_SEPOLIA_RPC_URL=https://sepolia-rollup.arbitrum.io/rpc
-NEXT_PUBLIC_FHEBLUFF_CONTRACT_ADDRESS=0x155e95b2375d90d545629768B7a89D8f08ce1822
+NEXT_PUBLIC_FHEBLUFF_CONTRACT_ADDRESS=0x8571285D4cc5e7C3bc52Ee642962af8b4e35c48D
 ```
 
 The deployer key is server/CLI-only. Never prefix it with `NEXT_PUBLIC_`, commit it, or put it in frontend code:

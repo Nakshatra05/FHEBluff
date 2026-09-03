@@ -2,7 +2,7 @@
   "chainId": 421614,
   "network": "Arbitrum Sepolia",
   "contract": "FHEBluff",
-  "address": "0x155e95b2375d90d545629768B7a89D8f08ce1822",
+  "address": "0x8571285D4cc5e7C3bc52Ee642962af8b4e35c48D",
   "cofheSdk": "0.7.1",
   "cofheContracts": "0.2.0"
 }
