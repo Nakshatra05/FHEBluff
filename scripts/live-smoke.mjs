@@ -77,10 +77,11 @@ await send(hostWallet, 'submitEntropy', [tableId, hostEntropy, hostProof]);
 await send(guestWallet, 'submitEntropy', [tableId, guestEntropy, guestProof]);
 
 let remaining = await publicClient.readContract({ address: contractAddress, abi, functionName: 'getShuffleProgress', args: [tableId] });
+const totalCards = remaining;
 while (remaining > 0n) {
-  await send(hostWallet, 'advanceShuffle', [tableId, remaining > 1n ? 2 : 1], remaining === 51n ? 60 : 12);
+  await send(hostWallet, 'advanceShuffle', [tableId, remaining > 3n ? 4 : Number(remaining)], remaining > 4n ? 60 : 20);
   remaining = await publicClient.readContract({ address: contractAddress, abi, functionName: 'getShuffleProgress', args: [tableId] });
-  console.log(`Encrypted shuffle: ${remaining}/51 steps remain`);
+  console.log(`Private deal: ${remaining}/${totalCards} cards remain`);
 }
 
 const hostCards = await publicClient.readContract({ address: contractAddress, abi, functionName: 'getMyHoleCards', args: [tableId], account: host });
@@ -100,11 +101,9 @@ for (let turn = 0; turn < 2; turn++) {
   await send(actor, 'act', [tableId, 4, 0n]);
 }
 
-for (let street = 0; street < 3; street++) {
-  const handles = await publicClient.readContract({ address: contractAddress, abi, functionName: 'getCommunityHandles', args: [tableId] });
-  const [values, signatures] = await reveal(hostClient, handles);
-  await send(hostWallet, 'publishCommunity', [tableId, values, signatures]);
-}
+const boardHandles = await publicClient.readContract({ address: contractAddress, abi, functionName: 'getCommunityHandles', args: [tableId] });
+const [boardValues, boardSignatures] = await reveal(hostClient, boardHandles);
+await send(hostWallet, 'publishCommunity', [tableId, boardValues, boardSignatures]);
 const showdownHandles = await publicClient.readContract({ address: contractAddress, abi, functionName: 'getShowdownHandles', args: [tableId] });
 const [showdownValues, showdownSignatures] = await reveal(hostClient, showdownHandles);
 await send(hostWallet, 'settleShowdown', [tableId, showdownValues, showdownSignatures]);

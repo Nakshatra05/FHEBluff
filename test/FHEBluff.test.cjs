@@ -62,6 +62,7 @@ describe('FHEBluff', function () {
     const [b, bProof] = await bobClient.encryptInputs([Encryptable.uint128(222n)]).setConsumingContract(address).execute();
     await game.connect(alice).submitEntropy(0, a, aProof);
     await game.connect(bob).submitEntropy(0, b, bProof);
+    expect(await game.getShuffleProgress(0)).to.equal(9n);
     while ((await game.getShuffleProgress(0)) > 0n) await game.advanceShuffle(0, 1);
     const aliceHandles = await game.connect(alice).getMyHoleCards(0);
     const bobHandles = await game.connect(bob).getMyHoleCards(0);
@@ -143,12 +144,12 @@ describe('FHEBluff', function () {
     }
     expect((await game.getTableView(0))[5]).to.equal(3n);
 
-    for (const expectedPhase of [4n, 5n, 6n]) {
-      const handles = await game.getCommunityHandles(0);
-      const [values, signatures] = await revealPublic(clients[0], handles);
-      await game.publishCommunity(0, values, signatures);
-      expect((await game.getTableView(0))[5]).to.equal(expectedPhase);
-    }
+    const boardHandles = await game.getCommunityHandles(0);
+    expect(boardHandles.length).to.equal(5);
+    const [boardValues, boardSignatures] = await revealPublic(clients[0], boardHandles);
+    await game.publishCommunity(0, boardValues, boardSignatures);
+    expect((await game.getTableView(0))[5]).to.equal(6n);
+    await expect(game.publishCommunity(0, boardValues, boardSignatures)).to.be.revertedWithCustomError(game, 'BadReveal');
 
     const showdownHandles = await game.getShowdownHandles(0);
     const [values, signatures] = await revealPublic(clients[0], showdownHandles);
