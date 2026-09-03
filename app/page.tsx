@@ -19,7 +19,7 @@ export default function Home() {
         <div className="hidden items-center gap-8 text-sm font-bold uppercase md:flex">
           <a href="#how">How it works</a><a href="#privacy">Privacy</a><a href="#tech">Network</a>
         </div>
-        <Link href="/play" className="brutal-button bg-pink px-4 py-2 text-sm">ENTER APP <ArrowUpRight className="size-4" /></Link>
+        <form action="/play"><button type="submit" className="brutal-button bg-pink px-4 py-2 text-sm">ENTER APP <ArrowUpRight className="size-4" /></button></form>
       </nav>
 
       <section className="relative mx-auto grid max-w-7xl border-x-3 border-ink px-4 py-14 sm:px-8 lg:grid-cols-[1.2fr_.8fr] lg:py-24">
@@ -34,7 +34,7 @@ export default function Home() {
             Texas Hold’em where bets are transparent, results are verifiable, and your hole cards stay encrypted with Fhenix CoFHE.
           </p>
           <div className="mt-9 flex flex-wrap gap-4">
-            <Link href="/play" className="brutal-button bg-acid px-7 py-4 text-base">ENTER APP <ArrowUpRight /></Link>
+            <form action="/play"><button type="submit" className="brutal-button bg-acid px-7 py-4 text-base">ENTER APP <ArrowUpRight /></button></form>
             <a href="#privacy" className="brutal-button bg-white px-7 py-4 text-base">HOW PRIVACY WORKS</a>
           </div>
         </div>
@@ -75,7 +75,7 @@ export default function Home() {
       <section id="tech" className="border-t-3 border-ink bg-acid py-16">
         <div className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-8 px-4 sm:px-8 lg:flex-row lg:items-end">
           <div><p className="eyebrow">READY TO ANTE UP?</p><h2 className="section-title max-w-3xl">One point per win. Zero cards leaked.</h2><p className="mt-5 max-w-2xl text-lg font-semibold">Credits are permanent reputation—not tokens, not money. Climb the global board one verified hand at a time.</p></div>
-          <Link href="/play" className="brutal-button shrink-0 bg-ink px-8 py-5 text-white">ENTER FHEBLUFF <ArrowUpRight /></Link>
+          <form action="/play"><button type="submit" className="brutal-button shrink-0 bg-ink px-8 py-5 text-white">ENTER FHEBLUFF <ArrowUpRight /></button></form>
         </div>
       </section>
       <footer className="border-t-3 border-ink bg-ink px-4 py-6 text-center font-mono text-xs font-bold uppercase tracking-wider text-white">FHEBLUFF · COFHE 0.7 · ARBITRUM SEPOLIA · CREDITS HAVE NO MONETARY VALUE</footer>
