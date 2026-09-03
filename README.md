@@ -39,7 +39,7 @@ Ciphertext handles are opaque public identifiers, not card values. Returning a h
 
 Seats, stacks, bets, pot size, dealer, turn, phase, action deadline, folds/all-ins, revealed board cards, settlement, Credits, and leaderboard rankings are intentionally public. Action methods authenticate with `msg.sender`, reject out-of-turn or invalid betting, and guard against repeated settlement.
 
-The engine supports 2–6 players, blinds, check/call/raise/fold/all-in, betting-round transitions, disconnected-player timeout folding, side pots, multiple all-ins, ties, persistent Credits, and next-hand rotation.
+The engine supports 2–6 players, blinds, check/call/raise/fold/all-in, betting-round transitions, disconnected-player timeout folding, timed recovery from a stalled encrypted deal, host seat removal between hands, side pots, multiple all-ins, ties, persistent Credits, and next-hand rotation.
 
 ## Local development
 
@@ -80,7 +80,7 @@ npm run deploy:arb-sepolia
 npm run seed:arb-sepolia
 ```
 
-Hardhat uses the official CoFHE Arbitrum Sepolia preset. Contract tests run against the CoFHE mock environment and cover owner-only decryption, rejected unauthorized decryption, encrypted multi-party entropy, unique dealing, host reassignment, abandonment, single settlement, multiple all-ins, side pots, and chip conservation.
+Hardhat uses the official CoFHE Arbitrum Sepolia preset. Contract tests run against the CoFHE mock environment and cover owner-only decryption, rejected unauthorized decryption, encrypted multi-party entropy, unique dealing, host reassignment, abandonment and stalled-deal recovery, single settlement, multiple all-ins, side pots, and chip conservation.
 
 `smoke:arb-sepolia` creates a temporary two-wallet table on the deployed contract, submits independently encrypted entropy, advances the real encrypted shuffle, verifies that cross-player decryption is rejected, and settles the hand through CoFHE threshold decryption. It requires the server-only variables `PRIVATE_KEY` and `FHEBLUFF_CONTRACT_ADDRESS`; the generated guest key exists only for that process.
 

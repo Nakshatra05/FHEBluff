@@ -36,6 +36,7 @@ contract FHEBluff {
     event ActionTaken(uint256 indexed tableId, address indexed player, uint8 action, uint256 amount);
     event CommunityRevealed(uint256 indexed tableId, uint8 count);
     event HandSettled(uint256 indexed tableId, uint256 indexed handId, address[] winners, uint256 pot);
+    event HandAborted(uint256 indexed tableId, uint256 indexed handId);
     event TableAbandoned(uint256 indexed tableId);
 
     error InvalidTable(); error InvalidPhase(); error NotSeated(); error AlreadySeated(); error TableFull(); error NotYourTurn(); error InvalidAction(); error AlreadySubmitted(); error Unauthorized(); error BadReveal();
@@ -63,19 +64,24 @@ contract FHEBluff {
         Table storage t = _table(tableId);
         if (t.phase != Phase.Seating && t.phase != Phase.Settled && t.phase != Phase.Abandoned) revert InvalidPhase();
         uint8 plus = seatPlusOne[tableId][msg.sender]; if (plus == 0) revert NotSeated();
-        uint256 idx = plus - 1; uint256 last = t.seats.length - 1;
-        if (idx != last) { t.seats[idx] = t.seats[last]; seatPlusOne[tableId][t.seats[idx].player] = uint8(idx + 1); }
-        t.seats.pop(); delete seatPlusOne[tableId][msg.sender];
-        if (t.seats.length == 0) { t.host = address(0); t.phase = Phase.Abandoned; emit TableAbandoned(tableId); }
-        else { if (msg.sender == t.host) t.host = t.seats[0].player; if (t.dealer >= t.seats.length) t.dealer = 0; }
+        _removeSeat(tableId, t, plus - 1, msg.sender == t.host);
         emit PlayerLeft(tableId, msg.sender);
+    }
+
+    function removePlayer(uint256 tableId, address player) external {
+        Table storage t = _table(tableId);
+        if (msg.sender != t.host) revert Unauthorized();
+        if (t.phase != Phase.Seating && t.phase != Phase.Settled) revert InvalidPhase();
+        uint8 plus = seatPlusOne[tableId][player]; if (plus == 0) revert NotSeated();
+        _removeSeat(tableId, t, plus - 1, player == t.host);
+        emit PlayerLeft(tableId, player);
     }
 
     function startHand(uint256 tableId) external {
         Table storage t = _table(tableId);
         if (msg.sender != t.host) revert Unauthorized();
         if ((t.phase != Phase.Seating && t.phase != Phase.Settled) || _fundedCount(t) < 2) revert InvalidPhase();
-        t.handId++; t.pot = 0; t.currentBet = 0; t.revealedCommunity = 0; t.phase = Phase.AwaitingEntropy;
+        t.handId++; t.pot = 0; t.currentBet = 0; t.revealedCommunity = 0; t.phase = Phase.AwaitingEntropy; t.actionDeadline = uint64(block.timestamp) + ACTION_WINDOW;
         aggregateEntropy[tableId] = euint128.wrap(bytes32(0));
         for (uint256 i; i < t.seats.length; ++i) { Seat storage s=t.seats[i]; s.bet=0; s.committed=0; s.state=s.stack==0?PlayerState.SittingOut:PlayerState.Active; s.entropySubmitted=false; s.acted=false; }
         emit HandStarted(tableId, t.handId);
@@ -134,6 +140,17 @@ contract FHEBluff {
         shuffleState[tableId] = state; FHE.allowThis(state);
         emit ShuffleProgress(tableId, t.shuffleCursor);
         if (t.shuffleCursor == 0) _finishDeal(tableId, t);
+        else t.actionDeadline = uint64(block.timestamp) + ACTION_WINDOW;
+    }
+
+    function abortStalledHand(uint256 tableId) external {
+        Table storage t = _table(tableId);
+        if (t.phase != Phase.AwaitingEntropy || t.actionDeadline == 0) revert InvalidPhase();
+        require(block.timestamp > t.actionDeadline, "not timed out");
+        t.phase = Phase.Seating; t.shuffleCursor = 0; t.actionDeadline = 0;
+        aggregateEntropy[tableId] = euint128.wrap(bytes32(0)); shuffleState[tableId] = euint128.wrap(bytes32(0));
+        for (uint256 i; i < t.seats.length; ++i) { Seat storage s=t.seats[i]; s.entropySubmitted=false; s.acted=false; s.state=s.stack==0?PlayerState.SittingOut:PlayerState.Active; }
+        emit HandAborted(tableId, t.handId);
     }
 
     function _finishDeal(uint256 tableId, Table storage t) private {
@@ -201,6 +218,7 @@ contract FHEBluff {
     function _settleUncontested(uint256 tableId,Table storage t) private {address winner;for(uint256 i;i<t.seats.length;++i)if(t.seats[i].state==PlayerState.Active||t.seats[i].state==PlayerState.AllIn){winner=t.seats[i].player;t.seats[i].stack+=uint96(t.pot);break;}_awardCredit(winner);address[] memory ws=new address[](1);ws[0]=winner;t.phase=Phase.Settled;t.dealer=_nextFunded(t,t.dealer);t.actionDeadline=0;emit HandSettled(tableId,t.handId,ws,t.pot);t.pot=0;}
     function _settleSidePots(Table storage t,uint256[] memory scores) private returns(address[] memory winners){uint96[] memory levels=new uint96[](t.seats.length);uint256 n;for(uint256 i;i<t.seats.length;++i)if(t.seats[i].committed>0)levels[n++]=t.seats[i].committed;for(uint256 i=1;i<n;++i){uint96 key=levels[i];uint256 j=i;while(j>0&&levels[j-1]>key){levels[j]=levels[j-1];--j;}levels[j]=key;}address[] memory temp=new address[](t.seats.length);bool[] memory credited=new bool[](t.seats.length);uint256 wn;uint96 prev;for(uint256 l;l<n;++l){uint96 level=levels[l];if(level==prev)continue;uint256 layer;for(uint256 i;i<t.seats.length;++i){uint96 capped=t.seats[i].committed<level?t.seats[i].committed:level;if(capped>prev)layer+=capped-prev;}uint256 best;uint256 ties;for(uint256 i;i<t.seats.length;++i)if(t.seats[i].committed>=level&&t.seats[i].state!=PlayerState.Folded&&t.seats[i].state!=PlayerState.SittingOut){if(scores[i]>best){best=scores[i];ties=1;}else if(scores[i]==best)ties++;}if(ties>0){uint256 share=layer/ties;uint256 remainder=layer%ties;for(uint256 i;i<t.seats.length;++i)if(t.seats[i].committed>=level&&t.seats[i].state!=PlayerState.Folded&&scores[i]==best){t.seats[i].stack+=uint96(share+(remainder>0?1:0));if(remainder>0)remainder--;if(!credited[i]){credited[i]=true;temp[wn++]=t.seats[i].player;_awardCredit(t.seats[i].player);}}}prev=level;}winners=new address[](wn);for(uint256 i;i<wn;++i)winners[i]=temp[i];}
     function _awardCredit(address player) private {credits[player]++;if(!seenOnBoard[player]){seenOnBoard[player]=true;creditedPlayers.push(player);}}
+    function _removeSeat(uint256 tableId,Table storage t,uint256 idx,bool removingHost) private {address player=t.seats[idx].player;uint256 last=t.seats.length-1;if(idx!=last){t.seats[idx]=t.seats[last];seatPlusOne[tableId][t.seats[idx].player]=uint8(idx+1);}t.seats.pop();delete seatPlusOne[tableId][player];if(t.seats.length==0){t.host=address(0);t.phase=Phase.Abandoned;emit TableAbandoned(tableId);}else{if(removingHost)t.host=t.seats[0].player;if(t.dealer>=t.seats.length)t.dealer=0;}}
     function _commit(Table storage t,uint8 idx,uint96 amount) private {Seat storage s=t.seats[idx];uint96 pay=amount>s.stack?s.stack:amount;s.stack-=pay;s.bet+=pay;s.committed+=pay;t.pot+=pay;if(s.stack==0)s.state=PlayerState.AllIn;}
     function _clearActedExcept(Table storage t,uint8 except) private {for(uint256 i;i<t.seats.length;++i)if(i!=except&&t.seats[i].state==PlayerState.Active)t.seats[i].acted=false;}
     function _roundComplete(Table storage t) private view returns(bool){for(uint256 i;i<t.seats.length;++i)if(t.seats[i].state==PlayerState.Active&&(!t.seats[i].acted||t.seats[i].bet!=t.currentBet))return false;return true;}

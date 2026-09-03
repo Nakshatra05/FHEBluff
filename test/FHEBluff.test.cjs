@@ -87,6 +87,23 @@ describe('FHEBluff', function () {
     expect((await game.getTableView(0))[5]).to.equal(8n);
   });
 
+  it('recovers a stalled encrypted deal and lets the host remove a disconnected seat', async function () {
+    const [host, alice, outsider] = await hre.ethers.getSigners();
+    const game = await (await hre.ethers.getContractFactory('FHEBluff')).deploy();
+    await game.createTable(2, 10, 1000);
+    await game.connect(host).joinTable(0, 1000);
+    await game.connect(alice).joinTable(0, 1000);
+    await game.startHand(0);
+    await expect(game.abortStalledHand(0)).to.be.revertedWith('not timed out');
+    await hre.network.provider.send('evm_increaseTime', [601]);
+    await hre.network.provider.send('evm_mine');
+    await game.connect(outsider).abortStalledHand(0);
+    expect((await game.getTableView(0))[5]).to.equal(0n);
+    await expect(game.connect(outsider).removePlayer(0, alice.address)).to.be.revertedWithCustomError(game, 'Unauthorized');
+    await game.removePlayer(0, alice.address);
+    expect((await game.getTableView(0))[4]).to.equal(1n);
+  });
+
   it('settles an uncontested pot once and awards only the winner', async function () {
     const [host, alice] = await hre.ethers.getSigners();
     const game = await (await hre.ethers.getContractFactory('FHEBluff')).deploy();
