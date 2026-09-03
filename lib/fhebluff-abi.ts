@@ -1,0 +1,28 @@
+export const fheBluffAbi = [
+  { type:'function', name:'tableCount', stateMutability:'view', inputs:[], outputs:[{type:'uint256'}] },
+  { type:'function', name:'credits', stateMutability:'view', inputs:[{name:'player',type:'address'}], outputs:[{type:'uint256'}] },
+  { type:'function', name:'createTable', stateMutability:'nonpayable', inputs:[{name:'maxPlayers',type:'uint8'},{name:'smallBlind',type:'uint96'},{name:'minBuyIn',type:'uint96'}], outputs:[{name:'tableId',type:'uint256'}] },
+  { type:'function', name:'joinTable', stateMutability:'nonpayable', inputs:[{name:'tableId',type:'uint256'},{name:'buyIn',type:'uint96'}], outputs:[] },
+  { type:'function', name:'leaveTable', stateMutability:'nonpayable', inputs:[{name:'tableId',type:'uint256'}], outputs:[] },
+  { type:'function', name:'startHand', stateMutability:'nonpayable', inputs:[{name:'tableId',type:'uint256'}], outputs:[] },
+  { type:'function', name:'act', stateMutability:'nonpayable', inputs:[{name:'tableId',type:'uint256'},{name:'action',type:'uint8'},{name:'amount',type:'uint96'}], outputs:[] },
+  { type:'function', name:'submitEntropy', stateMutability:'nonpayable', inputs:[{name:'tableId',type:'uint256'},{name:'entropyHandle',type:'bytes32'},{name:'proof',type:'bytes'}], outputs:[] },
+  { type:'function', name:'getMyHoleCards', stateMutability:'view', inputs:[{name:'tableId',type:'uint256'}], outputs:[{name:'first',type:'bytes32'},{name:'second',type:'bytes32'}] },
+  { type:'function', name:'getTableView', stateMutability:'view', inputs:[{name:'tableId',type:'uint256'}], outputs:[{name:'host',type:'address'},{name:'maxPlayers',type:'uint8'},{name:'smallBlind',type:'uint96'},{name:'minBuyIn',type:'uint96'},{name:'playerCount',type:'uint8'},{name:'phase',type:'uint8'},{name:'handId',type:'uint256'},{name:'pot',type:'uint256'},{name:'currentBet',type:'uint256'},{name:'actingSeat',type:'uint8'},{name:'actionDeadline',type:'uint64'}] },
+  { type:'function', name:'getSeats', stateMutability:'view', inputs:[{name:'tableId',type:'uint256'}], outputs:[{name:'players',type:'address[]'},{name:'stacks',type:'uint96[]'},{name:'bets',type:'uint96[]'},{name:'states',type:'uint8[]'}] },
+  { type:'function', name:'getCommunityCards', stateMutability:'view', inputs:[{name:'tableId',type:'uint256'}], outputs:[{name:'cards',type:'uint8[]'}] },
+  { type:'function', name:'getCommunityHandles', stateMutability:'view', inputs:[{name:'tableId',type:'uint256'}], outputs:[{name:'handles',type:'bytes32[]'}] },
+  { type:'function', name:'getShowdownHandles', stateMutability:'view', inputs:[{name:'tableId',type:'uint256'}], outputs:[{name:'handles',type:'bytes32[]'}] },
+  { type:'function', name:'getShuffleProgress', stateMutability:'view', inputs:[{name:'tableId',type:'uint256'}], outputs:[{name:'remainingSteps',type:'uint8'}] },
+  { type:'function', name:'hasSubmittedEntropy', stateMutability:'view', inputs:[{name:'tableId',type:'uint256'},{name:'player',type:'address'}], outputs:[{type:'bool'}] },
+  { type:'function', name:'advanceShuffle', stateMutability:'nonpayable', inputs:[{name:'tableId',type:'uint256'},{name:'steps',type:'uint8'}], outputs:[] },
+  { type:'function', name:'publishCommunity', stateMutability:'nonpayable', inputs:[{name:'tableId',type:'uint256'},{name:'values',type:'uint8[]'},{name:'signatures',type:'bytes[]'}], outputs:[] },
+  { type:'function', name:'settleShowdown', stateMutability:'nonpayable', inputs:[{name:'tableId',type:'uint256'},{name:'values',type:'uint8[]'},{name:'signatures',type:'bytes[]'}], outputs:[] },
+  { type:'function', name:'forceTimeoutFold', stateMutability:'nonpayable', inputs:[{name:'tableId',type:'uint256'}], outputs:[] },
+  { type:'event', name:'TableCreated', inputs:[{name:'tableId',type:'uint256',indexed:true},{name:'host',type:'address',indexed:true}], anonymous:false },
+  { type:'event', name:'ActionTaken', inputs:[{name:'tableId',type:'uint256',indexed:true},{name:'player',type:'address',indexed:true},{name:'action',type:'uint8',indexed:false},{name:'amount',type:'uint256',indexed:false}], anonymous:false },
+  { type:'event', name:'HandSettled', inputs:[{name:'tableId',type:'uint256',indexed:true},{name:'handId',type:'uint256',indexed:true},{name:'winners',type:'address[]',indexed:false},{name:'pot',type:'uint256',indexed:false}], anonymous:false },
+] as const;
+
+export const PHASES = ['SEATING','AWAITING ENTROPY','PREFLOP','FLOP','TURN','RIVER','SHOWDOWN','SETTLED','ABANDONED'] as const;
+export const ACTIONS = { FOLD:0, CHECK:1, CALL:2, RAISE:3, ALL_IN:4 } as const;

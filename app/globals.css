@@ -1,0 +1,23 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+@theme inline {
+  --color-cream: #fff8df; --color-ink: #11100f; --color-acid: #d8ff3e; --color-pink: #ff4fa3; --color-purple: #6647f5; --color-green: #3bea8b;
+  --font-sans: var(--font-sans-custom); --font-mono: var(--font-mono-custom); --font-heading: var(--font-display);
+}
+
+:root { --background:#fff8df; --foreground:#11100f; }
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body { margin:0; background:var(--background); color:var(--foreground); font-family:var(--font-sans-custom),sans-serif; }
+button,a { -webkit-tap-highlight-color:transparent; }
+.brutal-button { display:inline-flex; align-items:center; justify-content:center; gap:.55rem; border:3px solid #11100f; font-weight:900; text-transform:uppercase; box-shadow:5px 5px 0 #11100f; transition:transform .12s,box-shadow .12s; }
+.brutal-button:hover { transform:translate(2px,2px); box-shadow:3px 3px 0 #11100f; }
+.brutal-button:active { transform:translate(5px,5px); box-shadow:0 0 0 #11100f; }
+.shadow-hard { box-shadow:7px 7px 0 #11100f; }.shadow-hard-sm { box-shadow:4px 4px 0 #11100f; }.shadow-hard-lg { box-shadow:12px 12px 0 #11100f; }
+.eyebrow { font-family:var(--font-mono-custom); font-size:.8rem; font-weight:700; letter-spacing:.14em; text-transform:uppercase; }
+.section-title { margin-top:.65rem; font-family:var(--font-display); font-size:clamp(2.5rem,6vw,5.5rem); line-height:.92; letter-spacing:-.045em; text-transform:uppercase; }
+.input-brutal { width:100%; min-height:3rem; border:3px solid #11100f; background:#fff; padding:.6rem .75rem; font-weight:800; outline:none; }
+.input-brutal:focus { box-shadow:4px 4px 0 #6647f5; }
+@media (max-width:380px){.brutal-button{box-shadow:3px 3px 0 #11100f}.section-title{font-size:2.35rem}}
