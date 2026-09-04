@@ -4,15 +4,16 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePrivy } from '@privy-io/react-auth';
 import { useAccount, usePublicClient, useReadContract, useReadContracts, useSwitchChain, useWaitForTransactionReceipt, useWalletClient, useWriteContract } from 'wagmi';
 import { Encryptable, FheTypes } from '@cofhe/sdk';
-import { Activity, ArrowLeft, Coins, Crown, Eye, EyeOff, LockKeyhole, Plus, Radio, ShieldCheck, Spade, Trophy, Users, WalletCards, X } from 'lucide-react';
+import { Activity, ArrowLeft, Coins, Crown, Eye, EyeOff, History, LockKeyhole, Plus, Radio, ShieldCheck, Spade, Trophy, Users, WalletCards, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ACTIONS, fheBluffAbi, PHASES } from '@/lib/fhebluff-abi';
-import { ARBITRUM_SEPOLIA_CHAIN_ID, POKER_ADDRESS } from '@/lib/network';
+import { ARBITRUM_SEPOLIA_CHAIN_ID, POKER_ADDRESS, POKER_DEPLOYMENT_BLOCK } from '@/lib/network';
 import { cofheClient } from '@/lib/cofhe-client';
 
 type TableView = readonly [`0x${string}`, number, bigint, bigint, number, number, bigint, bigint, bigint, number, bigint];
-type AppView = 'tables'|'active'|'credits'|'leaderboard'|'privacy';
+type AppView = 'tables'|'active'|'history'|'credits'|'leaderboard'|'privacy';
+type HandResult = { tableId:bigint; handId:bigint; winners:readonly `0x${string}`[]; pot:bigint; transactionHash:`0x${string}` };
 const short = (v?: string) => v ? `${v.slice(0,6)}…${v.slice(-4)}` : '—';
 const number = (v: bigint | number | undefined) => Number(v || 0);
 
@@ -36,9 +37,22 @@ export default function PokerApp() {
   const submissionLock = useRef(false);
   const [submissionLocked,setSubmissionLocked] = useState(false);
   const [submissionError,setSubmissionError] = useState('');
+  const [handHistory,setHandHistory] = useState<HandResult[]>([]);
+  const [historyLoading,setHistoryLoading] = useState(true);
+  const [historyError,setHistoryError] = useState('');
   const { isLoading:isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash:txHash });
 
   useEffect(()=>{ if(isSuccess){ void refreshCount(); void refreshTables(); } },[isSuccess, refreshCount, refreshTables]);
+  useEffect(()=>{
+    if(appView!=='history'||!contractReady||!publicClient) return;
+    let cancelled=false;
+    void publicClient.getContractEvents({address:POKER_ADDRESS,abi:fheBluffAbi,eventName:'HandSettled',fromBlock:POKER_DEPLOYMENT_BLOCK,toBlock:'latest'}).then(logs=>{
+      if(cancelled)return;
+      setHistoryError('');
+      setHandHistory(logs.map(log=>({tableId:log.args.tableId!,handId:log.args.handId!,winners:log.args.winners!,pot:log.args.pot!,transactionHash:log.transactionHash})).reverse());
+    }).catch(error=>{if(!cancelled)setHistoryError(error instanceof Error?error.message:'Could not load onchain hand history');}).finally(()=>{if(!cancelled)setHistoryLoading(false);});
+    return()=>{cancelled=true;};
+  },[appView,contractReady,publicClient]);
   useEffect(()=>{
     const context = typeof document === 'undefined' ? undefined : (document as Document & {modelContext?: {registerTool:(tool:unknown, opts?:unknown)=>void}}).modelContext;
     if(!context?.registerTool) return;
@@ -65,8 +79,10 @@ export default function PokerApp() {
   };
   const createTable = () => transact('createTable',[maxPlayers,BigInt(smallBlind),BigInt(minBuyIn)]);
   const rows = (tables || []).map((entry,i)=>({ id:ids[i], data:entry.status==='success' ? entry.result as TableView : null })).filter(x=>x.data);
+  const openRows = rows.filter(({data})=>data && (number(data[5])===0 || number(data[5])===7));
   const activeRows = rows.filter(({data})=>data && number(data[5])>0 && number(data[5])<7);
-  const titles:Record<AppView,[string,string]>={tables:['ONCHAIN LOBBY','Pick your poison.'],active:['LIVE HANDS','Action is onchain.'],credits:['PLAYER PROFILE','Your reputation.'],leaderboard:['GLOBAL CREDITS','Top the table.'],privacy:['COFHE PRIVACY','Encrypted by design.']};
+  const abandonedRows = rows.filter(({data})=>data && number(data[5])===8);
+  const titles:Record<AppView,[string,string]>={tables:['ONCHAIN LOBBY','Pick your poison.'],active:['LIVE HANDS','Action is onchain.'],history:['ONCHAIN ARCHIVE','Hands leave receipts.'],credits:['PLAYER PROFILE','Your reputation.'],leaderboard:['GLOBAL CREDITS','Top the table.'],privacy:['COFHE PRIVACY','Encrypted by design.']};
 
   return (
     <main className="min-h-screen bg-[#ece7d7] text-ink">
@@ -87,7 +103,7 @@ export default function PokerApp() {
       <div className="mx-auto grid max-w-[1500px] gap-5 p-3 sm:p-6 xl:grid-cols-[230px_1fr]">
         <aside className="hidden self-start border-3 border-ink bg-ink p-4 text-white shadow-hard xl:block">
           <p className="eyebrow text-acid">COMMAND DECK</p>
-          <div className="mt-7 space-y-2">{([['tables','Lobby',Users],['active','Active hands',Activity],['credits','Credits',Coins],['leaderboard','Leaderboard',Trophy]] as const).map(([value,label,Icon])=><button onClick={()=>setAppView(value)} key={label} className={`flex w-full items-center gap-3 border-2 border-white/30 px-3 py-3 text-left font-bold ${appView===value?'bg-acid text-ink':''}`}><Icon className="size-5" />{label}</button>)}</div>
+          <div className="mt-7 space-y-2">{([['tables','Lobby',Users],['active','Active hands',Activity],['history','History',History],['credits','Credits',Coins],['leaderboard','Leaderboard',Trophy]] as const).map(([value,label,Icon])=><button onClick={()=>setAppView(value)} key={label} className={`flex w-full items-center gap-3 border-2 border-white/30 px-3 py-3 text-left font-bold ${appView===value?'bg-acid text-ink':''}`}><Icon className="size-5" />{label}</button>)}</div>
           <div className="mt-10 border-2 border-acid p-4"><LockKeyhole className="size-8 text-acid"/><p className="mt-4 font-black">YOUR CARDS, YOUR KEYS.</p><p className="mt-2 text-sm text-white/70">CoFHE ACPs scope decryption to the seated wallet.</p></div>
         </aside>
 
@@ -98,15 +114,17 @@ export default function PokerApp() {
           </div>
 
           <Tabs value={appView} onValueChange={value=>setAppView(value as AppView)}>
-            <TabsList className="grid h-auto! w-full grid-cols-3 rounded-none border-3 border-ink bg-white p-1 shadow-hard-sm sm:inline-grid sm:w-auto">
+            <TabsList className="grid h-auto! w-full grid-cols-4 rounded-none border-3 border-ink bg-white p-1 shadow-hard-sm sm:inline-grid sm:w-auto">
               <TabsTrigger value="tables" className="min-h-11 rounded-none px-1 py-3 text-[11px] font-black data-active:bg-pink sm:px-5 sm:text-sm">OPEN TABLES</TabsTrigger>
+              <TabsTrigger value="history" className="min-h-11 rounded-none px-1 py-3 text-[11px] font-black data-active:bg-purple data-active:text-white sm:px-5 sm:text-sm">HISTORY</TabsTrigger>
               <TabsTrigger value="leaderboard" className="min-h-11 rounded-none px-1 py-3 text-[11px] font-black data-active:bg-acid sm:px-5 sm:text-sm">LEADERBOARD</TabsTrigger>
               <TabsTrigger value="privacy" className="min-h-11 rounded-none px-1 py-3 text-[11px] font-black data-active:bg-green sm:px-5 sm:text-sm">PRIVACY</TabsTrigger>
             </TabsList>
             <TabsContent value="tables" className="mt-5">
-              {!contractReady ? <Empty icon={X} title="CONTRACT NOT CONFIGURED" body="Set NEXT_PUBLIC_FHEBLUFF_CONTRACT_ADDRESS to the deployed Arbitrum Sepolia contract. No demo tables are substituted for chain state." /> : rows.length===0 ? <Empty icon={Spade} title="THE FELT IS QUIET" body="No tables exist yet. Connect a wallet and create the first verifiable game." /> : <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">{rows.map(({id,data})=><TableCard key={id.toString()} id={id} data={data!} onOpen={()=>setSelected(id)} />)}</div>}
+              {!contractReady ? <Empty icon={X} title="CONTRACT NOT CONFIGURED" body="Set NEXT_PUBLIC_FHEBLUFF_CONTRACT_ADDRESS to the deployed Arbitrum Sepolia contract. No demo tables are substituted for chain state." /> : openRows.length===0 ? <Empty icon={Spade} title="NO TABLES TAKING SEATS" body="Active and closed tables are kept out of the lobby. Connect a wallet and create a fresh table." /> : <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">{openRows.map(({id,data})=><TableCard key={id.toString()} id={id} data={data!} onOpen={()=>setSelected(id)} />)}</div>}
             </TabsContent>
             <TabsContent value="active" className="mt-5">{activeRows.length===0?<Empty icon={Activity} title="NO ACTIVE HANDS" body="Hands in progress will appear here with their current street and pot."/>:<div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">{activeRows.map(({id,data})=><TableCard key={id.toString()} id={id} data={data!} onOpen={()=>setSelected(id)}/>)}</div>}</TabsContent>
+            <TabsContent value="history" className="mt-5"><HistoryPanel hands={handHistory} abandoned={abandonedRows} loading={historyLoading} error={historyError} onOpen={setSelected}/></TabsContent>
             <TabsContent value="credits" className="mt-5"><Profile address={address} credits={number(creditData)} authenticated={authenticated} login={login}/></TabsContent>
             <TabsContent value="leaderboard" className="mt-5"><Leaderboard address={address} data={leaderData as readonly [readonly `0x${string}`[],readonly bigint[]]|undefined} /></TabsContent>
             <TabsContent value="privacy" className="mt-5"><PrivacyPanel /></TabsContent>
@@ -114,7 +132,7 @@ export default function PokerApp() {
         </section>
       </div>
       {selected!==null && <GameTable id={selected} address={address} close={()=>setSelected(null)} transact={transact} />}
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t-3 border-ink bg-cream xl:hidden">{([['tables',Users,'Lobby'],['active',Activity,'Hands'],['credits',Coins,'Credits'],['leaderboard',Trophy,'Ranks']] as const).map(([value,Icon,label])=><button onClick={()=>setAppView(value)} key={value} className={`grid min-h-16 place-items-center text-[11px] font-black ${appView===value?'bg-acid':''}`}><Icon className="size-5" />{label}</button>)}</nav>
+      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t-3 border-ink bg-cream xl:hidden">{([['tables',Users,'Lobby'],['active',Activity,'Hands'],['history',History,'History'],['credits',Coins,'Credits'],['leaderboard',Trophy,'Ranks']] as const).map(([value,Icon,label])=><button onClick={()=>setAppView(value)} key={value} className={`grid min-h-16 place-items-center text-[10px] font-black ${appView===value?'bg-acid':''}`}><Icon className="size-5" />{label}</button>)}</nav>
     </main>
   );
 }
@@ -124,6 +142,16 @@ function Empty({icon:Icon,title,body}:{icon:typeof Spade,title:string,body:strin
 
 function TableCard({id,data,onOpen}:{id:bigint,data:TableView,onOpen:()=>void}){
   return <article className="group border-3 border-ink bg-white p-5 shadow-hard transition-transform hover:-translate-y-1"><div className="flex items-start justify-between"><span className="border-2 border-ink bg-purple px-2 py-1 font-mono text-xs font-bold text-white">TABLE #{id.toString()}</span><span className="flex items-center gap-1 text-xs font-bold"><span className="size-2 rounded-full bg-green"/>{PHASES[number(data[5])]||'UNKNOWN'}</span></div><h3 className="mt-7 text-2xl font-black">{number(data[4])}/{number(data[1])} PLAYERS</h3><div className="mt-5 grid grid-cols-2 gap-2 font-mono text-xs"><div className="border-2 border-ink bg-cream p-3"><span className="block opacity-55">BLINDS</span>{number(data[2])}/{number(data[2])*2}</div><div className="border-2 border-ink bg-cream p-3"><span className="block opacity-55">BUY-IN</span>{number(data[3])} CHIPS</div></div><button onClick={onOpen} className="brutal-button mt-5 w-full bg-pink py-3">OPEN TABLE</button></article>
+}
+
+function HistoryPanel({hands,abandoned,loading,error,onOpen}:{hands:HandResult[],abandoned:{id:bigint,data:TableView|null}[],loading:boolean,error:string,onOpen:(id:bigint)=>void}){
+  if(loading)return <div className="border-3 border-ink bg-white p-10 text-center shadow-hard"><History className="mx-auto size-12 animate-pulse"/><h2 className="mt-4 font-heading text-3xl">READING ONCHAIN RECEIPTS</h2><p className="mt-2 font-semibold text-ink/60">Loading settlement events from Arbitrum Sepolia…</p></div>;
+  if(error)return <Empty icon={X} title="HISTORY UNAVAILABLE" body="The live RPC could not return settlement events. The playable lobby is still available; try History again shortly."/>;
+  if(hands.length===0&&abandoned.length===0)return <Empty icon={History} title="NO PAST HANDS YET" body="Settled hands and permanently closed tables will appear here directly from onchain records."/>;
+  return <div className="space-y-7">
+    <section><div className="mb-3 flex items-end justify-between gap-3"><div><p className="eyebrow text-purple">SETTLEMENT EVENTS</p><h2 className="font-heading text-3xl">COMPLETED HANDS</h2></div><span className="font-mono text-xs font-bold">{hands.length} RECORDED</span></div><div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">{hands.map(hand=><article key={`${hand.transactionHash}-${hand.handId}`} className="border-3 border-ink bg-white p-5 shadow-hard"><div className="flex items-center justify-between"><span className="border-2 border-ink bg-green px-2 py-1 font-mono text-xs font-bold">TABLE #{hand.tableId.toString()}</span><span className="font-mono text-xs font-bold">HAND #{hand.handId.toString()}</span></div><div className="mt-5 border-2 border-ink bg-cream p-3"><span className="font-mono text-[10px] font-bold text-ink/55">FINAL POT</span><strong className="block text-2xl">{number(hand.pot)} CHIPS</strong></div><div className="mt-4"><span className="font-mono text-[10px] font-bold text-ink/55">{hand.winners.length>1?'WINNERS · SPLIT POT':'WINNER'}</span>{hand.winners.map(winner=><p key={winner} className="mt-1 truncate font-mono text-xs font-bold">{short(winner)}</p>)}</div><div className="mt-5 grid grid-cols-2 gap-2"><button onClick={()=>onOpen(hand.tableId)} className="brutal-button bg-pink py-3 text-xs">TABLE DETAILS</button><a href={`https://sepolia.arbiscan.io/tx/${hand.transactionHash}`} target="_blank" rel="noreferrer" className="grid place-items-center border-3 border-ink bg-acid px-2 text-center text-xs font-black shadow-hard-sm">VIEW RECEIPT</a></div></article>)}</div></section>
+    {abandoned.length>0&&<section><div className="mb-3"><p className="eyebrow text-purple">CLOSED FOREVER</p><h2 className="font-heading text-3xl">ABANDONED TABLES</h2></div><div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">{abandoned.map(({id,data})=><article key={id.toString()} className="border-3 border-ink bg-[#d8d3c5] p-5 shadow-hard"><div className="flex items-center justify-between"><span className="border-2 border-ink bg-ink px-2 py-1 font-mono text-xs font-bold text-white">TABLE #{id.toString()}</span><span className="font-mono text-xs font-bold">ABANDONED</span></div><h3 className="mt-6 text-xl font-black">TABLE PERMANENTLY CLOSED</h3><p className="mt-2 font-semibold text-ink/65">The final seated player left. This contract state cannot accept new players.</p><p className="mt-4 font-mono text-xs font-bold">{number(data?.[6])} HANDS STARTED</p><button onClick={()=>onOpen(id)} className="brutal-button mt-5 w-full bg-white py-3">VIEW SUMMARY</button></article>)}</div></section>}
+  </div>;
 }
 
 function Leaderboard({address,data}:{address?:string,data?:readonly[readonly `0x${string}`[],readonly bigint[]]}){const players=data?.[0]||[];const totals=data?.[1]||[];return <div className="border-3 border-ink bg-white shadow-hard"><div className="flex items-center justify-between border-b-3 border-ink bg-acid p-5"><h2 className="font-heading text-3xl">CREDITS BOARD</h2><Crown/></div><div className="space-y-3 p-4 sm:p-5">{players.length===0?<p className="border-3 border-dashed border-ink p-8 text-center font-black">NO COMPLETED HANDS YET</p>:players.map((player,i)=><div key={player} className={`grid grid-cols-[42px_1fr_auto] items-center gap-3 border-3 border-ink p-3 sm:grid-cols-[56px_1fr_auto] sm:p-4 ${player.toLowerCase()===address?.toLowerCase()?'bg-green':'bg-cream'}`}><span className="font-heading text-2xl">#{i+1}</span><span className="min-w-0 truncate font-mono text-xs font-bold sm:text-sm">{short(player)}{player.toLowerCase()===address?.toLowerCase()?' · YOU':''}</span><strong>{number(totals[i])} CR</strong></div>)}<p className="pt-2 text-sm font-semibold text-ink/60">Read directly from the contract. Every tied winner receives one non-transferable Credit.</p></div></div>}
@@ -153,6 +181,9 @@ function GameTable({id,address,close,transact}:{id:bigint,address?:`0x${string}`
   const dealCardCount=(seats?.[3].filter(state=>state!==3).length??number(table?.[4]))*2+5;
   const phase=number(table?.[5]);
   const isMyTurn=phase>=2&&phase<=5&&me>=0&&number(table?.[9])===me;
+  const joinable=phase===0||phase===7;
+  const tableFull=number(table?.[4])>=number(table?.[1]);
+  const tableStatus=!table?'SYNCING':phase===8?'TABLE CLOSED · NO ACTIONS':phase===7?'HAND COMPLETE · READY FOR NEXT':phase===0?'SEATING · WAITING FOR PLAYERS':isMyTurn?'YOUR TURN':`SEAT ${number(table[9])+1} TO ACT`;
   const revealed=community?.length??0;
   const expectedBoard=phase===3?3:phase===4?4:phase===5?5:0;
   const needsBoardReveal=expectedBoard>revealed;
@@ -170,16 +201,20 @@ function GameTable({id,address,close,transact}:{id:bigint,address?:`0x${string}`
     <div className="grid grid-cols-3 gap-2 text-center"><Stat label="CURRENT BET" value={number(table?.[8])}/><Stat label="YOUR STACK" value={me>=0?number(seats?.[1][me]):0}/><Stat label="HAND" value={`#${number(table?.[6])}`}/></div>
     <div className="relative grid min-h-[480px] place-items-center overflow-hidden border-3 border-acid bg-[#0f714c] p-3 shadow-[8px_8px_0_#d8ff3e] sm:rounded-[45%]">
       <div className="absolute inset-4 border-2 border-dashed border-white/25 sm:rounded-[45%]" />
-      <div className="relative z-10 text-center"><p className="font-mono text-xs font-bold text-acid">{stage} · {isMyTurn ? 'YOUR TURN' : table ? `SEAT ${number(table[9])+1} TO ACT` : 'SYNCING'}</p><div className="mt-5 flex justify-center gap-2">{Array.from({length:5},(_,i)=><PlayingCard key={i} value={community?.[i]}/>)}</div><div className="mt-6 inline-block border-3 border-ink bg-acid px-5 py-3 font-heading text-2xl text-ink">{number(table?.[7])} CHIPS</div></div>
+      <div className="relative z-10 text-center"><p className="font-mono text-xs font-bold text-acid">{stage} · {tableStatus}</p><div className="mt-5 flex justify-center gap-2">{Array.from({length:5},(_,i)=><PlayingCard key={i} value={community?.[i]} hidden={community?.[i]===undefined}/>)}</div><div className="mt-6 inline-block border-3 border-ink bg-acid px-5 py-3 font-heading text-2xl text-ink">{number(table?.[7])} CHIPS</div></div>
       <div className="absolute inset-x-3 top-3 flex justify-center gap-3 sm:inset-x-24 sm:justify-between">{seats?.[0].slice(0,3).map((p,i)=><Seat key={p} player={p} stack={number(seats[1][i])} bet={number(seats[2][i])} state={seats[3][i]} active={number(table?.[9])===i}/>)}</div>
       <div className="absolute inset-x-3 bottom-3 flex justify-center gap-3 sm:inset-x-24 sm:justify-between">{seats?.[0].slice(3,6).map((p,j)=>{const i=j+3;return <Seat key={p} player={p} stack={number(seats[1][i])} bet={number(seats[2][i])} state={seats[3][i]} active={number(table?.[9])===i}/>})}</div>
     </div>
     <div className="sticky bottom-16 z-20 border-3 border-ink bg-cream p-3 text-ink shadow-hard sm:bottom-3">
-      <div className="mb-3 flex items-center justify-between">
+      {phase===8?<div className="mb-3 border-3 border-ink bg-white p-4"><p className="font-heading text-2xl">ARCHIVED TABLE</p><p className="mt-1 text-sm font-semibold text-ink/65">The final player left, permanently closing this table. No wallet transaction is required here.</p></div>:<div className="mb-3 flex items-center justify-between">
         <div className="flex gap-2"><PlayingCard value={privateCards[0]} hidden={privateCards.length===0}/><PlayingCard value={privateCards[1]} hidden={privateCards.length===0}/></div>
         <div className="max-w-[60%] text-right"><p className="font-mono text-[10px] font-bold">PRIVATE HAND</p><p className="text-xs font-semibold text-purple"><LockKeyhole className="inline size-3"/> {privateCards.length?'DECRYPTED LOCALLY':'ACP LOCKED'}</p><p className="mt-1 truncate text-[10px] font-bold text-ink/55">{privateError?'Transaction failed':privateConfirming?'Confirming onchain…':privatePending?'Check your wallet…':privateSuccess?'Transaction confirmed.':privacyStatus}</p></div>
-      </div>
-      {me<0 ? <button onClick={()=>transact('joinTable',[id,BigInt(table?.[3]||1000)])} className="brutal-button w-full bg-acid py-4">JOIN FOR {number(table?.[3])} CHIPS</button>
+      </div>}
+      {!table?<div className="border-3 border-ink bg-white p-4 text-center font-black">SYNCING TABLE STATE…</div>
+      : phase===8?<button onClick={close} className="brutal-button w-full bg-acid py-4">BACK TO LOBBY · CREATE A NEW TABLE</button>
+      : me<0 ? !joinable?<div className="border-3 border-ink bg-white p-4 text-center"><p className="font-black">SPECTATING · HAND IN PROGRESS</p><p className="mt-1 text-xs font-semibold text-ink/60">Seats reopen after the hand is settled.</p></div>
+      : tableFull?<div className="border-3 border-ink bg-white p-4 text-center"><p className="font-black">TABLE FULL</p><p className="mt-1 text-xs font-semibold text-ink/60">Watch this table or choose another from the lobby.</p></div>
+      : <button onClick={()=>transact('joinTable',[id,BigInt(table[3])])} className="brutal-button w-full bg-acid py-4">JOIN FOR {number(table[3])} CHIPS</button>
       : phase===0||phase===7 ? <div className="grid grid-cols-2 gap-2"><button onClick={()=>transact('leaveTable',[id])} className="brutal-button bg-white py-4">LEAVE TABLE</button>{address?.toLowerCase()===table?.[0]?.toLowerCase()&&number(table?.[4])>=2?<button onClick={()=>transact('startHand',[id])} className="brutal-button bg-pink py-4">START QUICK HAND</button>:<div className="grid place-items-center border-3 border-ink bg-white p-2 text-center text-xs font-black">WAITING FOR HOST</div>}</div>
       : phase===1 ? timedOut ? <button onClick={()=>transact('abortStalledHand',[id])} className="brutal-button w-full bg-pink py-4">RESET STALLED DEAL</button>
       : number(shuffleRemaining)>0 ? <div><div className="mb-2 flex items-center justify-between font-mono text-xs font-bold"><span>PRIVATE DEAL</span><span>{shuffleBatches} {shuffleBatches===1?'BATCH':'BATCHES'} LEFT</span></div><div className="mb-3 h-2 border-2 border-ink bg-white"><div className="h-full bg-purple" style={{width:`${Math.max(8,100-(number(shuffleRemaining)/dealCardCount)*100)}%`}}/></div><button disabled={privateBusy} onClick={advanceEncryptedShuffle} className="brutal-button w-full bg-acid py-4 disabled:cursor-wait disabled:opacity-50"><ShieldCheck/> {privateBusy?'TRANSACTION IN PROGRESS':'DEAL NEXT BATCH'}</button></div>

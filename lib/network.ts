@@ -11,3 +11,4 @@ export const arbitrumSepoliaCofhe = defineChain({
 });
 
 export const POKER_ADDRESS = (process.env.NEXT_PUBLIC_FHEBLUFF_CONTRACT_ADDRESS || '') as `0x${string}`;
+export const POKER_DEPLOYMENT_BLOCK = BigInt(process.env.NEXT_PUBLIC_FHEBLUFF_DEPLOYMENT_BLOCK || '304978155');

@@ -3,12 +3,14 @@ import tailwindcss from '@tailwindcss/postcss';
 import vinext from 'vinext';
 import { defineConfig } from 'vite';
 import { fileURLToPath } from 'node:url';
-import hostingConfig from './.openai/hosting.json';
 
 const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
   '00000000-0000-4000-8000-000000000000';
 
-const { d1, r2 } = hostingConfig;
+// This app has no D1 or R2 bindings. The previous Sites manifest was removed
+// when Vercel became the primary host, while the local Vinext preview remains usable.
+const d1: string | undefined = undefined;
+const r2: string | undefined = undefined;
 
 // macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === 'seatbelt';

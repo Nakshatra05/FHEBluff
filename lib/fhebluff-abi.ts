@@ -25,6 +25,8 @@ export const fheBluffAbi = [
   { type:'event', name:'TableCreated', inputs:[{name:'tableId',type:'uint256',indexed:true},{name:'host',type:'address',indexed:true}], anonymous:false },
   { type:'event', name:'ActionTaken', inputs:[{name:'tableId',type:'uint256',indexed:true},{name:'player',type:'address',indexed:true},{name:'action',type:'uint8',indexed:false},{name:'amount',type:'uint256',indexed:false}], anonymous:false },
   { type:'event', name:'HandSettled', inputs:[{name:'tableId',type:'uint256',indexed:true},{name:'handId',type:'uint256',indexed:true},{name:'winners',type:'address[]',indexed:false},{name:'pot',type:'uint256',indexed:false}], anonymous:false },
+  { type:'event', name:'HandAborted', inputs:[{name:'tableId',type:'uint256',indexed:true},{name:'handId',type:'uint256',indexed:true}], anonymous:false },
+  { type:'event', name:'TableAbandoned', inputs:[{name:'tableId',type:'uint256',indexed:true}], anonymous:false },
 ] as const;
 
 export const PHASES = ['SEATING','AWAITING ENTROPY','PREFLOP','FLOP','TURN','RIVER','SHOWDOWN','SETTLED','ABANDONED'] as const;
