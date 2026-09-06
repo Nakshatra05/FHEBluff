@@ -7,7 +7,6 @@ import { Encryptable } from '@cofhe/sdk';
 import { decodeEventLog, decodeFunctionData, multicall3Abi } from 'viem';
 import { ReadyToPlay } from '@/components/poker/ready-to-play';
 import { tableLabel } from '@/lib/table-label';
-import { CardPreparation } from '@/components/poker/card-preparation';
 import { HandResultPanel } from '@/components/poker/hand-result';
 import { PracticeTable } from '@/components/poker/practice-table';
 import { competitionRank } from '@/lib/reputation';
@@ -363,7 +362,6 @@ function GameTable({id,address,close,transact,busy,notify}:{id:bigint,address?:`
         <div className={`flex gap-2 ${cardView.busy||phase===1?'deal-motion':''}`}><PlayingCard value={privateCards[0]} hidden={privateCards[0]===undefined}/><PlayingCard value={privateCards[1]} hidden={privateCards[1]===undefined}/></div>
         <div className="max-w-[60%] text-right"><p className="font-mono text-xs font-bold">PRIVATE HAND</p><p className="text-sm font-semibold text-purple"><LockKeyhole className="inline size-3"/> {cardView.stage==='ready'?'DECRYPTED LOCALLY':cardView.busy?'UNLOCKING':'PRIVATE CARDS'}</p>{insight&&<p className="mt-1 inline-flex items-center gap-1 border-2 border-ink bg-acid px-2 py-1 text-xs font-black"><Target className="size-3"/>{insight}</p>}<p className="mt-1 text-sm font-bold leading-relaxed text-ink/75">{cardView.message||privacyStatus}</p></div>
       </div>}
-      {me>=0&&((phase>=2&&phase<=6)||phase===9)&&<CardPreparation protectedDeal={phase===9} stage={cardView.stage} elapsed={cardView.elapsed} message={cardView.message} busy={cardView.busy} onRetry={()=>void cardView.load()} onStop={cardView.stop} disabled={privateBusy||busy}/>}
       {(phase===0||phase===7)&&<div className="mb-3"><button onClick={inviteFriend} className="min-h-11 border-2 border-ink bg-white px-3 text-base font-black">Copy friend invite</button>{inviteStatus&&<output className="mt-1 block break-all text-sm">{inviteStatus}</output>}</div>}
 
       {recover&&<div className="mb-3 border-2 border-ink bg-white p-3"><p className="text-base font-black">{recover==='abortStalledHand'?'Deal expired · no chips at risk':'Player clock expired'}</p><p className="mt-1 text-sm">{recover==='abortStalledHand'?'Close this undealt hand as no contest. All stacks stay unchanged; no Credits are awarded.':'The timed-out player folds. The remaining player wins, or the hand continues with the remaining players.'}</p><button disabled={busy||privateBusy} onClick={()=>transact(recover,[id])} className="brutal-button mt-2 min-h-11 w-full bg-acid text-sm disabled:opacity-50">{recover==='abortStalledHand'?'CLOSE HAND · 0 NET CHIPS':'RESOLVE TIMED-OUT TURN'}</button></div>}

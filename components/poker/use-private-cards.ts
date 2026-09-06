@@ -11,6 +11,7 @@ import {fheBluffAbi} from '@/lib/fhebluff-abi';
 import {withDeadline} from '@/lib/async-deadline';
 import {shouldAutoStartCards} from '@/lib/card-auto-start';
 import {cardViewError} from '@/lib/card-view-error';
+import {retryPrivateRead} from '@/lib/retry-private-read';
 
 type ViewState={key:string;stage:'idle'|'authorizing'|'decrypting'|'ready'|'error';message:string;cards:(number|undefined)[];started:number};
 export function usePrivateCards(id:bigint,handId:bigint|undefined,address:`0x${string}`|undefined,enabled:boolean){
@@ -53,9 +54,9 @@ export function usePrivateCards(id:bigint,handId:bigint|undefined,address:`0x${s
         const handles=await handlesPromise;
         if(!current())throw new Error('View stopped');
         if(handles.some(handle=>/^0x0+$/.test(handle)))throw new Error('Cards not ready');
-        return Promise.all(handles.map((handle,index)=>client.decryptForView(handle,FheTypes.Uint8).withACP(acp).set404RetryTimeout(30000).onPoll(({requestId})=>{if(!current())throw new Error('View stopped');update('decrypting',requestId?'Secure decryption is queued with CoFHE. No extra signature needed.':'CoFHE is still preparing the encrypted deal. Cards appear here when ready.');}).execute().then(value=>{const card=Number(value);if(!Number.isInteger(card)||card<0||card>51)throw new Error('Invalid cards');if(current()){available[index]=card;update('decrypting','One card unlocked. Waiting for your other card…');}return value;})));
+        return Promise.all(handles.map((handle,index)=>retryPrivateRead(active=>client.decryptForView(handle,FheTypes.Uint8).withACP(acp).set404RetryTimeout(30000).onPoll(()=>{if(!active())throw new Error('View stopped');}).execute(),current).then(value=>{const card=Number(value);if(!Number.isInteger(card)||card<0||card>51)throw new Error('Invalid cards');if(current()){available[index]=card;update('decrypting','One card unlocked. Loading the other automatically…');}return value;})));
       };
-      const values=await withDeadline(decrypt(),90000);
+      const values=await withDeadline(decrypt(),200000);
       if(!current())return;
       const cards=values.map(Number);
       if(cards.some(card=>!Number.isInteger(card)||card<0||card>51)||cards[0]===cards[1])throw new Error('Invalid cards');
