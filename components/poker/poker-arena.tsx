@@ -1,4 +1,5 @@
 import {Coins,LockKeyhole,Spade,Users} from 'lucide-react';
+import {DealerHost} from './dealer-host';
 
 export type ArenaSeat={player:string;stack:number;bet:number;state:number;active:boolean;credits:number};
 const short=(value:string)=>`${value.slice(0,4)}…${value.slice(-3)}`;
@@ -29,6 +30,7 @@ export function PokerArena({seats,capacity,board,phase,status,pot,address}:{seat
   return <section aria-label="Poker table" className="poker-felt">
     <div className="arena-seats">{Array.from({length:split},(_,i)=>seat(i))}</div>
     <div className="arena-board">
+      <DealerHost/>
       <div className="arena-stage"><span className="stage-dot"/>{phase.replaceAll('_',' ')}<span className="arena-stage-divider">/</span><span>{status}</span></div>
       <div className="community-cards">{Array.from({length:5},(_,i)=><PlayingCard key={i} value={board[i]}/>)}</div>
       <div className="arena-pot"><Coins aria-hidden="true"/><span><small>THE POT</small><strong key={pot}>{pot.toLocaleString()}<span> chips</span></strong></span></div>

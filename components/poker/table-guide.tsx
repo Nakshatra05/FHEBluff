@@ -2,7 +2,8 @@ import {BookOpen,CheckCircle2} from 'lucide-react';
 
 export function TableGuide({phase,seated,host,players,full,submitted,batches,myTurn,due,boardPending,folded,allIn,busy}:{phase:number;seated:boolean;host:boolean;players:number;full:boolean;submitted:boolean;batches:number;myTurn:boolean;due:number;boardPending:boolean;folded:boolean;allIn:boolean;busy:boolean}) {
   let title='Take a seat to play';let body='Joining gives you the table’s free play chips. Your wallet confirmation pays only the testnet network fee.';
-  if(phase===8){title='This table has closed';body='Go back to the lobby to find a fresh table.';}
+  if(phase===9){title='Cards first · betting clock off';body='Your cards unlock automatically. Once both are visible, confirm readiness below. Betting starts only after everyone confirms; the preparation window is separate from the turn timer.';}
+  else if(phase===8){title='This table has closed';body='Go back to the lobby to find a fresh table.';}
   else if(!seated&&full&&(phase===0||phase===7)){title='Table full · watching';body='These seats are occupied. You can watch, or return to the lobby to find an open seat.';}
   else if(!seated&&phase>0&&phase<7){title='You’re watching a hand';body='You can join once this hand finishes. Shared cards and public moves are visible while you watch.';}
   else if(seated&&(phase===0||phase===7)){title=players<2?'Bring a friend to the table':host?'Ready for the next hand':'Waiting for the host';body=players<2?'Copy the invite link below and send it to a friend. Two funded players are enough to start.':host?'Press Start hand below. Then each player readies their private cards.':'The host starts the hand. Keep this table open; it updates automatically.';}

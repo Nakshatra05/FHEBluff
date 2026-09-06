@@ -24,7 +24,7 @@ test('table controls remain in document flow and explicit silent card reads cann
   assert.match(css,/\.poker-controls \{ position:static;/);
   assert.doesNotMatch(page,/sm:sticky/);
   assert.match(view,/if\(silent&&\(!cached\|\|autoStarted.current===key\)\)return/);
-  assert.ok(view.indexOf('if(silent&&')<view.indexOf('authorizeCardView(client,address)'));
+  assert.ok(view.indexOf('if(silent&&')<view.indexOf('authorizeCardView(client,address,POKER_ADDRESS)'));
   assert.match(view,/stored.issuer.toLowerCase\(\)===address.toLowerCase\(\)/);
   assert.match(view,/stored.contracts.some/);
 });

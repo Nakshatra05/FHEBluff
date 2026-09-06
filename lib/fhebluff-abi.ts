@@ -1,4 +1,6 @@
 export const fheBluffAbi = [
+  { type:'function', name:'isPlayerReady', stateMutability:'view', inputs:[{name:'tableId',type:'uint256'},{name:'player',type:'address'}], outputs:[{type:'bool'}] },
+  { type:'function', name:'confirmCardsReady', stateMutability:'nonpayable', inputs:[{name:'tableId',type:'uint256'},{name:'expectedHandId',type:'uint256'}], outputs:[] },
   { type:'function', name:'tableCount', stateMutability:'view', inputs:[], outputs:[{type:'uint256'}] },
   { type:'function', name:'credits', stateMutability:'view', inputs:[{name:'player',type:'address'}], outputs:[{type:'uint256'}] },
   { type:'function', name:'leaderboard', stateMutability:'view', inputs:[{name:'limit',type:'uint256'}], outputs:[{name:'players',type:'address[]'},{name:'totals',type:'uint256[]'}] },
@@ -29,5 +31,5 @@ export const fheBluffAbi = [
   { type:'event', name:'TableAbandoned', inputs:[{name:'tableId',type:'uint256',indexed:true}], anonymous:false },
 ] as const;
 
-export const PHASES = ['SEATING','AWAITING ENTROPY','PREFLOP','FLOP','TURN','RIVER','SHOWDOWN','SETTLED','ABANDONED'] as const;
+export const PHASES = ['SEATING','AWAITING ENTROPY','PREFLOP','FLOP','TURN','RIVER','SHOWDOWN','SETTLED','ABANDONED','CARDS PREPARING'] as const;
 export const ACTIONS = { FOLD:0, CHECK:1, CALL:2, RAISE:3, ALL_IN:4 } as const;

@@ -17,6 +17,7 @@ import { TransactionNotice } from '@/components/poker/transaction-notice';
 import { PokerArena, PlayingCard } from '@/components/poker/poker-arena';
 import { HandHistory } from '@/components/poker/hand-history';
 import { usePrivateCards } from '@/components/poker/use-private-cards';
+import { useCreditsBoard } from '@/components/poker/use-credits-board';
 import { buildDealCalls, DEAL_ROUTER } from '@/lib/deal-batch';
 import { isOpenTable, recoveryAction } from '@/lib/table-lifecycle';
 import { transactionError, type TransactionFeedback } from '@/lib/transaction-feedback';
@@ -25,8 +26,9 @@ import { Activity, ArrowLeft, Coins, Crown, EyeOff, Flame, History, LockKeyhole,
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { fheBluffAbi, PHASES } from '@/lib/fhebluff-abi';
-import { ARBITRUM_SEPOLIA_CHAIN_ID, POKER_ADDRESS, POKER_DEPLOYMENT_BLOCK } from '@/lib/network';
-import { cofheClient } from '@/lib/cofhe-client';
+import { ARBITRUM_SEPOLIA_CHAIN_ID } from '@/lib/network';
+import { createCardViewClient } from '@/lib/cofhe-client';
+import {deployments,resolveDeployment,PokerDeploymentContext,usePokerDeployment,type DeploymentVersion} from '@/lib/poker-deployment';
 
 type TableView = readonly [`0x${string}`, number, bigint, bigint, number, number, bigint, bigint, bigint, number, bigint];
 type AppView = 'tables'|'active'|'history'|'credits'|'leaderboard'|'privacy';
@@ -47,7 +49,15 @@ function handInsight(cards:number[]){
   return HAND_NAMES[bestHand(cards)[0]]+' · your best five cards';
 }
 
-export default function PokerApp() {
+export default function PokerPage(){
+  const [version,setVersion]=useState<DeploymentVersion|null>(null);
+  useEffect(()=>{const timer=setTimeout(()=>setVersion(resolveDeployment(window.location.search)),0);return()=>clearTimeout(timer);},[]);
+  if(!version)return <main className="min-h-screen bg-cream p-8 font-bold">Opening the poker lobby…</main>;
+  return <PokerDeploymentContext.Provider value={deployments[version]}><PokerApp key={version}/></PokerDeploymentContext.Provider>;
+}
+
+function PokerApp() {
+  const {address:POKER_ADDRESS,block:POKER_DEPLOYMENT_BLOCK,readiness}=usePokerDeployment();
   const { ready, authenticated, login, logout } = usePrivy();
   const { address, chainId } = useAccount();
   const publicClient = usePublicClient();
@@ -65,8 +75,7 @@ export default function PokerApp() {
   const { data: tableCount, refetch: refreshCount } = useReadContract({ address: POKER_ADDRESS, abi: fheBluffAbi, functionName:'tableCount', query:{ enabled:contractReady,refetchInterval:5000 } });
   const ids = useMemo(() => Array.from({ length: Math.min(number(tableCount), 48) }, (_,i)=>BigInt(number(tableCount)-1-i)), [tableCount]);
   const { data: tables, isPending:tablesLoading, refetch: refreshTables } = useReadContracts({ contracts: ids.map(id=>({ address:POKER_ADDRESS, abi:fheBluffAbi, functionName:'getTableView' as const, args:[id] })),query:{refetchInterval:5000} });
-  const { data: creditData } = useReadContract({ address:POKER_ADDRESS, abi:fheBluffAbi, functionName:'credits', args: address ? [address] : undefined, query:{ enabled:contractReady && !!address,refetchInterval:5000 } });
-  const { data:leaderData } = useReadContract({address:POKER_ADDRESS,abi:fheBluffAbi,functionName:'leaderboard',args:[100n],query:{enabled:contractReady,refetchInterval:15000}});
+  const {creditData,leaderData}=useCreditsBoard(address);
   const { writeContractAsync } = useWriteContract();
   const submissionLock = useRef(false);
   const [submissionLocked,setSubmissionLocked] = useState(false);
@@ -89,7 +98,7 @@ export default function PokerApp() {
     }catch{if(!cancelled)setHistoryError('History unavailable');}finally{fetching=false;if(!cancelled)setHistoryLoading(false);}};
     void load();const timer=setInterval(()=>void load(),15000);
     return()=>{cancelled=true;clearInterval(timer);};
-  },[contractReady,publicClient]);
+  },[contractReady,publicClient,POKER_ADDRESS,POKER_DEPLOYMENT_BLOCK]);
   useEffect(()=>{
     const context = typeof document === 'undefined' ? undefined : (document as Document & {modelContext?: {registerTool:(tool:unknown, opts?:unknown)=>void}}).modelContext;
     if(!context?.registerTool) return;
@@ -99,7 +108,7 @@ export default function PokerApp() {
   },[]);
 
   const wrongNetwork = authenticated && chainId !== ARBITRUM_SEPOLIA_CHAIN_ID;
-  const transact = async (functionName:'createTable'|'joinTable'|'leaveTable'|'startHand'|'act'|'forceTimeoutFold'|'abortStalledHand', args:readonly unknown[]) => {
+  const transact = async (functionName:'createTable'|'joinTable'|'leaveTable'|'startHand'|'act'|'forceTimeoutFold'|'abortStalledHand'|'confirmCardsReady', args:readonly unknown[]) => {
     if(!authenticated) { login(); return; }
     if(wrongNetwork) { switchChain({chainId:ARBITRUM_SEPOLIA_CHAIN_ID}); return; }
     if(submissionLock.current) return;
@@ -134,7 +143,7 @@ export default function PokerApp() {
   };
   const rows = (tables || []).map((entry,i)=>({ id:ids[i], data:entry.status==='success' ? entry.result as TableView : null })).filter(x=>x.data);
   const openRows = rows.filter(({data})=>data && isOpenTable(number(data[5]),number(data[4]),number(data[1])));
-  const activeRows = rows.filter(({data})=>data && ((number(data[5])>0 && number(data[5])<7)||(number(data[5])===0&&number(data[4])>=number(data[1]))));
+  const activeRows = rows.filter(({data})=>data && ((number(data[5])>0 && number(data[5])<7)||number(data[5])===9||(number(data[5])===0&&number(data[4])>=number(data[1]))));
   const availableSeats=openRows.filter(({data})=>data&&number(data[4])<number(data[1])&&number(data[4])>0).sort((a,b)=>number(a.data?.[1])-number(b.data?.[1])||number(b.data?.[4])-number(a.data?.[4]));
   const quickSeat=()=>{if(availableSeats[0])setSelected(availableSeats[0].id);else {setAppView('tables');setCreateOpen(true);}};
   useEffect(()=>{
@@ -161,6 +170,7 @@ export default function PokerApp() {
       {notice&&!practiceOpen&&!createOpen&&<TransactionNotice notice={notice} onDismiss={dismissNotice}/>}
 
       <div className="mx-auto max-w-6xl p-3 sm:p-6">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-3 border-ink bg-acid p-3 font-bold"><span>{readiness?'CARDS FIRST. CLOCK SECOND.':'LEGACY TABLES · betting timers are not protected'}</span><a className="underline" href={readiness?'/play?version=legacy':'/play'}>{readiness?'Old tables & Credits':'Play protected tables →'}</a></div>
         <section className="min-w-0">
           <div className="mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
             <div><p className="eyebrow text-purple">{titles[appView][0]}</p><h1 className="font-heading text-3xl uppercase leading-none sm:text-4xl">{titles[appView][1]}</h1></div>
@@ -177,12 +187,12 @@ export default function PokerApp() {
             <TabsContent value="active" className="mt-5">{activeRows.length===0?<Empty icon={Activity} title="NO ACTIVE HANDS" body="Hands in progress will appear here with their current street and pot."/>:<div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">{activeRows.map(({id,data})=><TableCard key={id.toString()} id={id} data={data!} onOpen={()=>setSelected(id)}/>)}</div>}</TabsContent>
             <TabsContent value="history" className="mt-5"><HandHistory hands={handHistory} loading={historyLoading} error={historyError} onOpen={setSelected}/></TabsContent>
             <TabsContent value="credits" className="mt-5"><Profile address={address} credits={number(creditData)} authenticated={authenticated} login={login}/></TabsContent>
-            <TabsContent value="leaderboard" className="mt-5"><Leaderboard address={address} data={leaderData as readonly [readonly `0x${string}`[],readonly bigint[]]|undefined} /></TabsContent>
+            <TabsContent value="leaderboard" className="mt-5"><p className="mb-3 border-2 border-ink bg-cream p-3 text-sm">Credits combine wins from both contract versions. Your connected wallet appears here even at zero; login-only profiles are not yet shared globally.</p><Leaderboard address={address} data={leaderData as readonly [readonly `0x${string}`[],readonly bigint[]]|undefined} /></TabsContent>
             <TabsContent value="privacy" className="mt-5"><PrivacyPanel /></TabsContent>
           </Tabs>
         </section>
       </div>
-      {selected!==null && <GameTable key={selected.toString()} id={selected} address={address} close={()=>{setSelected(null);window.history.replaceState(null,'','/play');}} transact={transact} busy={submissionLocked} notify={setNotice} />}
+      {selected!==null && <GameTable key={selected.toString()} id={selected} address={address} close={()=>{setSelected(null);window.history.replaceState(null,'',readiness?'/play':'/play?version=legacy');}} transact={transact} busy={submissionLocked} notify={setNotice} />}
       {practiceOpen&&<PracticeTable close={()=>setPracticeOpen(false)} playRanked={()=>{setPracticeOpen(false);quickSeat();}}/>}
       <nav aria-label="Main navigation" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t-3 border-ink bg-cream sm:hidden">{([['tables',Users,'Lobby'],['active',Activity,'Hands'],['history',History,'History'],['credits',Coins,'Credits'],['leaderboard',Trophy,'Ranks'],['privacy',ShieldCheck,'Privacy']] as const).map(([value,Icon,label])=><button aria-current={appView===value?'page':undefined} onClick={()=>setAppView(value)} key={value} className={`grid min-h-16 place-items-center text-xs font-black ${appView===value?'bg-acid':''}`}><Icon className="size-5" />{label}</button>)}</nav>
     </main>
@@ -205,7 +215,10 @@ function Profile({address,credits,authenticated,login}:{address?:string,credits:
 function StatCard({label,value}:{label:string,value:string|number}){return <div className="border-3 border-ink bg-cream p-4"><span className="font-mono text-sm font-bold text-ink/75">{label}</span><strong className="mt-1 block text-xl">{value}</strong></div>}
 function PrivacyPanel(){return <div className="grid gap-4 lg:grid-cols-3">{[[LockKeyhole,'ENCRYPTED DEAL','Players contribute encrypted entropy. Hole-card handles receive wallet-specific ACL grants.'],[EyeOff,'NO SIDE CHANNELS','Card values never appear in events, transaction logs, or public plaintext storage.'],[ShieldCheck,'VERIFIED REVEAL','Street and showdown reveals require threshold-network signatures verified by CoFHE.']].map(([Icon,t,b])=><div key={String(t)} className="border-3 border-ink bg-white p-6 shadow-hard"><Icon className="size-10 text-purple"/><h3 className="mt-8 text-xl font-black">{String(t)}</h3><p className="mt-3 font-semibold leading-relaxed text-ink/65">{String(b)}</p></div>)}</div>}
 
-function GameTable({id,address,close,transact,busy,notify}:{id:bigint,address?:`0x${string}`,close:()=>void,busy:boolean,notify:(notice:TransactionFeedback)=>void,transact:(name:'joinTable'|'leaveTable'|'startHand'|'act'|'forceTimeoutFold'|'abortStalledHand',args:readonly unknown[])=>void}){
+function GameTable({id,address,close,transact,busy,notify}:{id:bigint,address?:`0x${string}`,close:()=>void,busy:boolean,notify:(notice:TransactionFeedback)=>void,transact:(name:'joinTable'|'leaveTable'|'startHand'|'act'|'forceTimeoutFold'|'abortStalledHand'|'confirmCardsReady',args:readonly unknown[])=>void}){
+  const {address:POKER_ADDRESS,block:POKER_DEPLOYMENT_BLOCK,readiness}=usePokerDeployment();
+  const cofheClient=useMemo(()=>createCardViewClient(POKER_ADDRESS),[POKER_ADDRESS]);
+  const {data:cardsAcknowledged}=useReadContract({address:POKER_ADDRESS,abi:fheBluffAbi,functionName:'isPlayerReady',args:address?[id,address]:undefined,query:{enabled:readiness&&!!address,refetchInterval:2000}});
   const [inviteStatus,setInviteStatus]=useState('');
   const [privacyStatus,setPrivacyStatus]=useState('');
   const [actionFeed,setActionFeed]=useState<ActionEntry[]>([]);
@@ -261,18 +274,18 @@ function GameTable({id,address,close,transact,busy,notify}:{id:bigint,address?:`
     const refresh=()=>{if(document.visibilityState==='visible'){void refetchView();void loadResult();}};
     document.addEventListener('visibilitychange',refresh);
     return()=>{cancelled=true;clearInterval(timer);document.removeEventListener('visibilitychange',refresh);};
-  },[publicClient,id,resultPhase,resultHandId,refetchView]);
+  },[publicClient,id,resultPhase,resultHandId,refetchView,POKER_ADDRESS,POKER_DEPLOYMENT_BLOCK]);
   const me=seats?.[0].findIndex(x=>x.toLowerCase()===address?.toLowerCase())??-1;
   const stage=number(table?.[5])===8?'CLOSED':PHASES[number(table?.[5])]||'LOADING';
   const timedOut=number(table?.[10])>0&&now>number(table?.[10]);
   const shuffleBatches=Math.ceil(number(shuffleRemaining)/4);
   const phase=number(table?.[5]);
-  const cardView=usePrivateCards(id,table?.[6],address,me>=0&&phase>=2&&phase<=6);
+  const cardView=usePrivateCards(id,table?.[6],address,me>=0&&((phase>=2&&phase<=6)||phase===9));
   const privateCards=cardView.cards;
   const isMyTurn=phase>=2&&phase<=5&&me>=0&&seats?.[3][me]===0&&number(table?.[9])===me;
   const joinable=phase===0||phase===7;
   const tableFull=number(table?.[4])>=number(table?.[1]);
-  const tableStatus=!table?'SYNCING':phase===8?'TABLE CLOSED · NO ACTIONS':phase===7?'HAND COMPLETE · READY FOR NEXT':phase===0?'SEATING · WAITING FOR PLAYERS':isMyTurn?'YOUR TURN':`SEAT ${number(table[9])+1} TO ACT`;
+  const tableStatus=!table?'SYNCING':phase===9?'CARDS FIRST · BETTING CLOCK OFF':phase===8?'TABLE CLOSED · NO ACTIONS':phase===7?'HAND COMPLETE · READY FOR NEXT':phase===0?'SEATING · WAITING FOR PLAYERS':isMyTurn?'YOUR TURN':`SEAT ${number(table[9])+1} TO ACT`;
   const revealed=community?.length??0;
   const recover=recoveryAction(phase,number(table?.[10]),now,seats?.[3][number(table?.[9])],revealed);
   const expectedBoard=phase===3?3:phase===4?4:phase===5?5:0;
@@ -286,7 +299,7 @@ function GameTable({id,address,close,transact,busy,notify}:{id:bigint,address?:`
   const potRatio=number(table?.[2])?number(table?.[7])/(number(table?.[2])*2):0;
   const heat=potRatio>=20?'INFERNO':potRatio>=8?'HEATING UP':'CALM';
   const insight=cardView.stage==='ready'?handInsight([...(privateCards as number[]),...(community||[]).map(Number)]):'';
-  const inviteFriend=async()=>{const url=new URL('/play',window.location.origin);url.searchParams.set('table',id.toString());try{await navigator.clipboard.writeText(url.toString());setInviteStatus('Invite copied — send it to a friend');}catch{setInviteStatus(url.toString());}};
+  const inviteFriend=async()=>{const url=new URL('/play',window.location.origin);url.searchParams.set('table',id.toString());url.searchParams.set('version',readiness?'ready':'legacy');try{await navigator.clipboard.writeText(url.toString());setInviteStatus('Invite copied — send it to a friend');}catch{setInviteStatus(url.toString());}};
   const makeMove=(action:number,amount=0n)=>{if(busy||privateBusy)return;transact('act',[id,action,amount]);};
   const connectCofhe=async()=>{if(!publicClient||!walletClient)throw new Error('Connect a wallet first');await cofheClient.connect(publicClient as never,walletClient as never);};
   const runPrivateTask=async(task:()=>Promise<void>)=>{
@@ -324,7 +337,7 @@ function GameTable({id,address,close,transact,busy,notify}:{id:bigint,address?:`
   if(phase===7)return <div className="fixed inset-0 z-50 overflow-y-auto bg-purple p-4 sm:p-8"><div className="mx-auto max-w-4xl py-6 sm:py-12"><HandResultPanel key={`${id}:${table?.[6]}`} handId={table?.[6]??0n} result={lastResult?.tableId===id?lastResult:null} address={address} seated={!!address&&!!lastResult?.participants?.some(player=>player.toLowerCase()===address.toLowerCase())} folded={seats?.[3][me]===1} onLobby={close}/></div></div>;
   return <div className="fixed inset-0 z-50 overflow-y-auto bg-[#191917] text-white"><header className="sticky top-0 z-20 flex items-center justify-between border-b-3 border-white/25 bg-ink px-3 py-3 sm:px-6"><button onClick={close} className="flex items-center gap-2 font-black"><ArrowLeft/> LOBBY</button><div className="text-center"><p className="font-mono text-xs text-acid">TABLE #{id.toString()}</p><p className="font-black">{stage}</p></div><div className="border-2 border-acid px-3 py-2 font-mono text-sm">POT {number(table?.[7])}</div></header><div className="poker-layout mx-auto grid max-w-7xl">
     {phase===7?<HandResultPanel key={`${id}:${table?.[6]}`} handId={table?.[6]??0n} result={lastResult?.tableId===id?lastResult:null} address={address} seated={!!address&&!!lastResult?.participants?.some(player=>player.toLowerCase()===address.toLowerCase())} folded={seats?.[3][me]===1} onLobby={close}/>:<TableGuide phase={phase} seated={me>=0} host={address?.toLowerCase()===table?.[0].toLowerCase()} players={number(table?.[4])} full={tableFull} submitted={!!entropySubmitted} batches={shuffleBatches===0?0:smallBatches?shuffleBatches:1} myTurn={isMyTurn} due={Math.min(number(seats?.[1][me]),Math.max(0,number(table?.[8])-number(seats?.[2][me])))} boardPending={needsBoardReveal} folded={seats?.[3][me]===1} allIn={seats?.[3][me]===2} busy={busy||privateBusy}/>}
-    <div><div className="mb-2 grid grid-cols-5 border-2 border-white/25 text-center font-mono text-xs font-black sm:text-xs">{['PREFLOP','FLOP','TURN','RIVER','SHOWDOWN'].map((label,index)=><span key={label} className={`border-r border-white/20 px-1 py-2 last:border-r-0 ${phase===index+2?'bg-acid text-ink':phase>index+2?'bg-green text-ink':'text-white/75'}`}>{phase>index+2?'✓ ':''}{label}</span>)}</div><div className="grid grid-cols-4 gap-2 text-center"><Stat label="CURRENT BET" value={number(table?.[8])}/><Stat label="YOUR STACK" value={me>=0?number(seats?.[1][me]):0}/><Stat label="HAND" value={`#${number(table?.[6])}`}/><Stat label="CLOCK" value={phase>=2&&phase<=6&&number(table?.[10])>0?`${secondsLeft}s`:'—'}/></div>{phase>=2&&phase<=6&&number(table?.[10])>0&&<div className="h-1 bg-white/15"><div className={`h-full transition-all ${secondsLeft<30?'bg-pink':'bg-acid'}`} style={{width:`${clockPercent}%`}}/></div>}</div>
+    <div><div className="mb-2 grid grid-cols-5 border-2 border-white/25 text-center font-mono text-xs font-black sm:text-xs">{['PREFLOP','FLOP','TURN','RIVER','SHOWDOWN'].map((label,index)=><span key={label} className={`border-r border-white/20 px-1 py-2 last:border-r-0 ${phase===index+2?'bg-acid text-ink':phase<=7&&phase>index+2?'bg-green text-ink':'text-white/75'}`}>{phase<=7&&phase>index+2?'✓ ':''}{label}</span>)}</div><div className="grid grid-cols-4 gap-2 text-center"><Stat label="CURRENT BET" value={number(table?.[8])}/><Stat label="YOUR STACK" value={me>=0?number(seats?.[1][me]):0}/><Stat label="HAND" value={`#${number(table?.[6])}`}/><Stat label="CLOCK" value={phase>=2&&phase<=6&&number(table?.[10])>0?`${secondsLeft}s`:'—'}/></div>{phase>=2&&phase<=6&&number(table?.[10])>0&&<div className="h-1 bg-white/15"><div className={`h-full transition-all ${secondsLeft<30?'bg-pink':'bg-acid'}`} style={{width:`${clockPercent}%`}}/></div>}</div>
     <div className="poker-scene">
       <PokerArena capacity={number(table?.[1])} phase={stage} status={tableStatus} pot={number(table?.[7])} address={address} board={community||[]} seats={(seats?.[0]||[]).map((player,i)=>({player,stack:number(seats?.[1][i]),bet:number(seats?.[2][i]),state:seats?.[3][i]||0,active:phase>=2&&phase<=5&&!needsBoardReveal&&number(table?.[9])===i,credits:seatCredits[i]||0}))}/>
       <aside className="border-3 border-white/25 bg-ink p-3 shadow-[5px_5px_0_#6c45ff]">
@@ -337,7 +350,7 @@ function GameTable({id,address,close,transact,busy,notify}:{id:bigint,address?:`
         <div className={`flex gap-2 ${cardView.busy||phase===1?'deal-motion':''}`}><PlayingCard value={privateCards[0]} hidden={privateCards[0]===undefined}/><PlayingCard value={privateCards[1]} hidden={privateCards[1]===undefined}/></div>
         <div className="max-w-[60%] text-right"><p className="font-mono text-xs font-bold">PRIVATE HAND</p><p className="text-sm font-semibold text-purple"><LockKeyhole className="inline size-3"/> {cardView.stage==='ready'?'DECRYPTED LOCALLY':cardView.busy?'UNLOCKING':'PRIVATE CARDS'}</p>{insight&&<p className="mt-1 inline-flex items-center gap-1 border-2 border-ink bg-acid px-2 py-1 text-xs font-black"><Target className="size-3"/>{insight}</p>}<p className="mt-1 text-sm font-bold leading-relaxed text-ink/75">{cardView.message||privacyStatus}</p></div>
       </div>}
-      {me>=0&&phase>=2&&phase<=6&&<CardPreparation stage={cardView.stage} elapsed={cardView.elapsed} message={cardView.message} busy={cardView.busy} onRetry={()=>void cardView.load()} onStop={cardView.stop} disabled={privateBusy||busy}/>}
+      {me>=0&&((phase>=2&&phase<=6)||phase===9)&&<CardPreparation protectedDeal={phase===9} stage={cardView.stage} elapsed={cardView.elapsed} message={cardView.message} busy={cardView.busy} onRetry={()=>void cardView.load()} onStop={cardView.stop} disabled={privateBusy||busy}/>}
       {(phase===0||phase===7)&&<div className="mb-3"><button onClick={inviteFriend} className="min-h-11 border-2 border-ink bg-white px-3 text-base font-black">Copy friend invite</button>{inviteStatus&&<output className="mt-1 block break-all text-sm">{inviteStatus}</output>}</div>}
 
       {recover&&<div className="mb-3 border-2 border-ink bg-white p-3"><p className="text-base font-black">{recover==='abortStalledHand'?'Deal expired · no chips at risk':'Player clock expired'}</p><p className="mt-1 text-sm">{recover==='abortStalledHand'?'Close this undealt hand as no contest. All stacks stay unchanged; no Credits are awarded.':'The timed-out player folds. The remaining player wins, or the hand continues with the remaining players.'}</p><button disabled={busy||privateBusy} onClick={()=>transact(recover,[id])} className="brutal-button mt-2 min-h-11 w-full bg-acid text-sm disabled:opacity-50">{recover==='abortStalledHand'?'CLOSE HAND · 0 NET CHIPS':'RESOLVE TIMED-OUT TURN'}</button></div>}
@@ -352,6 +365,7 @@ function GameTable({id,address,close,transact,busy,notify}:{id:bigint,address?:`
       : number(shuffleRemaining)>0 ? <div><p className="mb-3 text-base font-bold">{smallBatches?`${shuffleBatches} smaller batches left`:'Finish the encrypted deal with one wallet confirmation.'}</p><button disabled={privateBusy} onClick={advanceEncryptedShuffle} className="brutal-button w-full bg-acid py-4 disabled:opacity-50"><ShieldCheck/> {privateBusy?'DEALING…':smallBatches?'DEAL NEXT BATCH':'DEAL ALL CARDS'}</button><button onClick={()=>setSmallBatches(value=>!value)} className="mt-2 min-h-11 w-full text-sm font-bold underline">{smallBatches?'Use one-confirmation deal':'Having gas-estimation trouble? Use smaller batches'}</button></div>
       : entropySubmitted ? <div className="border-3 border-ink bg-white p-4 text-center font-black">READY · WAITING FOR OTHER PLAYERS</div>
       : <button disabled={privateBusy} onClick={submitEncryptedEntropy} className="brutal-button w-full bg-purple py-4 text-white disabled:cursor-wait disabled:opacity-50"><LockKeyhole/> {privateBusy?'TRANSACTION IN PROGRESS':'READY MY PRIVATE CARDS'}</button>
+      : phase===9 ? <div className="border-3 border-ink bg-white p-3"><p className="text-lg font-black">See your cards. Then play.</p><p className="my-2 text-sm">No blinds or turn timer until every player confirms. Preparation window: {secondsLeft}s. If it expires, close the deal without losing chips.</p>{timedOut?<button onClick={()=>transact('abortStalledHand',[id])} className="brutal-button bg-acid p-3">CLOSE DEAL · NO CHIPS LOST</button>:<button disabled={busy||!!cardsAcknowledged||cardView.stage!=='ready'} onClick={()=>{if(cardView.stage==='ready'&&table)transact('confirmCardsReady',[id,table[6]]);}} className="brutal-button w-full bg-acid p-3 disabled:opacity-50">{cardsAcknowledged?'READY · WAITING FOR OTHER PLAYERS':cardView.stage==='ready'?'I SEE MY CARDS · READY TO PLAY':'PREPARING YOUR PRIVATE CARDS…'}</button>}</div>
       : phase===6 ? <button disabled={privateBusy} onClick={()=>publishReveal(true)} className="brutal-button w-full bg-pink py-4 disabled:cursor-wait disabled:opacity-50"><ShieldCheck/> {privateBusy?'FINDING WINNER…':'SHOW WINNER · AWARD CREDITS'}</button>
       : needsBoardReveal ? <button disabled={privateBusy} onClick={()=>publishReveal(false)} className="brutal-button w-full bg-green py-4 disabled:cursor-wait disabled:opacity-50"><ShieldCheck/> {privateBusy?'REVEALING…':revealLabel}</button>
       : <><div className="mb-2 grid grid-cols-2 gap-2">{recover==='forceTimeoutFold'?<button onClick={()=>transact('forceTimeoutFold',[id])} className="min-h-12 border-2 border-ink bg-pink px-3 py-2 text-sm font-black">SKIP TIMED-OUT PLAYER</button>:<div className="grid place-items-center border-2 border-ink bg-white px-2 text-center font-mono text-xs font-bold">{isMyTurn?<span className="flex items-center gap-1 text-purple"><Timer className="size-3"/> YOUR MOVE · {secondsLeft}s</span>:'WAITING FOR PLAYER'}</div>}</div>{isMyTurn?<BettingControls key={`${table?.[6]}:${phase}:${number(table?.[8])}`} stack={number(seats?.[1][me])} bet={number(seats?.[2][me])} currentBet={number(table?.[8])} pot={number(table?.[7])} bigBlind={number(table?.[2])*2} onMove={makeMove}/>:<div className="border-3 border-ink bg-white p-3 text-center text-base font-black">Your buttons appear when it’s your turn.</div>}</>}

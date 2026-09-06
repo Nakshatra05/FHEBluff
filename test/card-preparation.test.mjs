@@ -23,6 +23,12 @@ test('normal preparation has no required button and success removes the preparat
   assert.match(render({stage:'authorizing',busy:true}),/permission signature/);
   assert.doesNotMatch(render({stage:'authorizing',busy:true}),/<button/);
 });
+
+test('protected deals explicitly keep chips and betting clock out of preparation',()=>{
+  const html=render({stage:'decrypting',busy:true,elapsed:90,protectedDeal:true});
+  assert.match(html,/Betting has not started/);
+  assert.doesNotMatch(html,/betting clock is not paused/);
+});
 test('only failed or stopped access exposes retry; slow legacy waits disclose active clock',()=>{
   assert.match(render({stage:'error',message:'Try again'}),/RETRY CARD ACCESS/);
   assert.match(render({stage:'idle',message:'Stopped'}),/RETRY CARD ACCESS/);

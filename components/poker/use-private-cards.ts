@@ -5,15 +5,18 @@ import {usePublicClient,useWalletClient} from 'wagmi';
 import {FheTypes} from '@cofhe/sdk';
 import {ValidationUtils} from '@cofhe/sdk/acps';
 import {authorizeCardView,createCardViewClient} from '@/lib/cofhe-client';
-import {POKER_ADDRESS,ARBITRUM_SEPOLIA_CHAIN_ID} from '@/lib/network';
+import {ARBITRUM_SEPOLIA_CHAIN_ID} from '@/lib/network';
+import {usePokerDeployment} from '@/lib/poker-deployment';
 import {fheBluffAbi} from '@/lib/fhebluff-abi';
 import {withDeadline} from '@/lib/async-deadline';
 import {shouldAutoStartCards} from '@/lib/card-auto-start';
+import {cardViewError} from '@/lib/card-view-error';
 
 type ViewState={key:string;stage:'idle'|'authorizing'|'decrypting'|'ready'|'error';message:string;cards:(number|undefined)[];started:number};
 export function usePrivateCards(id:bigint,handId:bigint|undefined,address:`0x${string}`|undefined,enabled:boolean){
+  const {address:POKER_ADDRESS}=usePokerDeployment();
   const publicClient=usePublicClient();const {data:walletClient}=useWalletClient();
-  const key=`${id}:${handId}:${address?.toLowerCase()}:${walletClient?.chain.id}`;
+  const key=`${POKER_ADDRESS}:${id}:${handId}:${address?.toLowerCase()}:${walletClient?.chain.id}`;
   const [state,setState]=useState<ViewState|null>(null);
   const request=useRef<{key:string;cancelled:boolean}|null>(null);
   const autoStarted=useRef('');
@@ -25,7 +28,7 @@ export function usePrivateCards(id:bigint,handId:bigint|undefined,address:`0x${s
   useEffect(()=>{if(!busy||!startedAt)return;const tick=()=>setElapsed(Math.floor((Date.now()-startedAt)/1000));tick();const timer=setInterval(tick,1000);return()=>clearInterval(timer);},[busy,startedAt]);
   const load=useCallback(async(silent=false)=>{
     if(request.current||!enabled||!address||!publicClient||!walletClient||walletClient.chain.id!==ARBITRUM_SEPOLIA_CHAIN_ID||walletClient.account.address.toLowerCase()!==address.toLowerCase())return;
-    const client=createCardViewClient();
+    const client=createCardViewClient(POKER_ADDRESS);
     const stored=client.acp.getActiveACP(ARBITRUM_SEPOLIA_CHAIN_ID,address);
     const cached=stored?.type==='self'&&stored.issuer.toLowerCase()===address.toLowerCase()&&stored.contracts.some(contract=>contract.toLowerCase()===POKER_ADDRESS.toLowerCase())&&ValidationUtils.isValid(stored).valid?stored:undefined;
     // Background loading must never trigger a signature request.
@@ -43,7 +46,7 @@ export function usePrivateCards(id:bigint,handId:bigint|undefined,address:`0x${s
       void handlesPromise.catch(()=>{});
       await withDeadline(client.connect(publicClient as never,walletClient as never),15000);
       if(!current())return;
-      const acp=cached??await withDeadline(authorizeCardView(client,address),60000);
+      const acp=cached??await withDeadline(authorizeCardView(client,address,POKER_ADDRESS),60000);
       if(!current())return;
       update('decrypting','Permission ready. Waiting for CoFHE to unlock your cards; no further wallet confirmation is needed.');
       const decrypt=async()=>{
@@ -59,10 +62,9 @@ export function usePrivateCards(id:bigint,handId:bigint|undefined,address:`0x${s
       update('ready','Your cards are visible only here. No card values were sent onchain.',cards);
     }catch(error){
       if(!current())return;
-      const rejected=error instanceof Error&&/reject|denied|cancel/i.test(error.message);
-      update('error',rejected?'Permission declined. Retry card access when you’re ready.':'Card viewing could not finish. CoFHE may still be processing the deal. Retry card access; no poker transaction is needed.');
+      update('error',cardViewError(error));
     }finally{run.cancelled=true;if(request.current===run)request.current=null;}
-  },[address,enabled,id,key,publicClient,walletClient]);
+  },[POKER_ADDRESS,address,enabled,id,key,publicClient,walletClient]);
   useEffect(()=>{
     const start=()=>{if(shouldAutoStartCards(enabled,document.visibilityState==='visible',key,autoStarted.current))void load();};
     const first=setTimeout(start,0);

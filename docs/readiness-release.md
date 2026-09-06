@@ -1,6 +1,14 @@
-# Readiness release — not active in production
+# Readiness release
 
-Deployed on Arbitrum Sepolia (421614) at `0x3D3aaFF33c73880e5d7837D24e4c736D7522FDF1`, block `306087732`. Frontend activation is pending. The deployment signer was supplied through non-echoing input and a child-process environment; no key was persisted.
+Deployed on Arbitrum Sepolia (421614) at `0x3D3aaFF33c73880e5d7837D24e4c736D7522FDF1`, block `306087732`. The frontend now selects this deployment for `/play`. The deployment signer was supplied through non-echoing input and a child-process environment; no key was persisted.
+
+## Routing and reputation
+
+- New invitations include `version=ready`. Original unversioned `?table=8` links continue to address the original contract, never successor table 8.
+- `/play?version=legacy` preserves original tables and history. Its timers cannot be retroactively protected.
+- ACP creation, client instances, pending permissions, and private-view keys are scoped by deployment address.
+- The Credits board sums recorded wins across both contracts and includes the connected wallet after its Credits reads complete, even at zero. This local entry is **not** a durable global login registry. Listing every login for all visitors still requires authenticated shared storage; no database or server authentication credentials are configured by this change.
+- Contract tests cover two players viewing their own cards, denying opponent access, readiness, expiry, stale hand acknowledgements, and the original poker lifecycle. Live two-wallet browser decryption speed has not been verified for this release.
 
 `contracts/FHEBluffReady.sol` is a separate successor contract. It does not change existing tables, balances, Credits, or permissions in the deployed FHEBluff contract.
 
