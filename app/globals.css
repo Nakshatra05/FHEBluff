@@ -20,4 +20,11 @@ button,a { -webkit-tap-highlight-color:transparent; }
 .section-title { margin-top:.65rem; font-family:var(--font-display); font-size:clamp(2.5rem,6vw,5.5rem); line-height:.92; letter-spacing:-.045em; text-transform:uppercase; }
 .input-brutal { width:100%; min-height:3rem; border:3px solid #11100f; background:#fff; padding:.6rem .75rem; font-weight:800; outline:none; }
 .input-brutal:focus { box-shadow:4px 4px 0 #6647f5; }
+@keyframes card-pop { 0%{opacity:0;transform:translateY(-18px) rotate(-3deg)} 70%{transform:translateY(3px) rotate(1deg)} 100%{opacity:1;transform:translateY(0) rotate(0)} }
+@keyframes turn-pulse { 0%,100%{box-shadow:0 0 0 0 rgba(216,255,62,.75)} 50%{box-shadow:0 0 0 8px rgba(216,255,62,0)} }
+@keyframes winner-burst { 0%,100%{transform:scale(1)} 45%{transform:scale(1.035) rotate(-1deg)} 55%{transform:scale(1.035) rotate(1deg)} }
+.card-pop { animation:card-pop .35s cubic-bezier(.2,.9,.2,1); }
+.turn-pulse { animation:turn-pulse 1.5s ease-out infinite; }
+.winner-burst { animation:winner-burst .8s ease-in-out infinite; }
+@media (prefers-reduced-motion:reduce){.card-pop,.turn-pulse,.winner-burst{animation:none!important}}
 @media (max-width:380px){.brutal-button{box-shadow:3px 3px 0 #11100f}.section-title{font-size:2.35rem}}
