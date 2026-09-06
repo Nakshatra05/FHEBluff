@@ -182,7 +182,10 @@ contract FHEBluffReady {
         t.phase=Phase.AwaitingCards;
         t.actionDeadline=uint64(block.timestamp)+CARD_READY_WINDOW;
         emit CardsDealt(tableId,t.handId);
+        if (!_requiresCardReadiness()) _startBetting(tableId,t);
     }
+
+    function _requiresCardReadiness() internal pure virtual returns(bool) { return true; }
 
     function isPlayerReady(uint256 tableId, address player) external view returns(bool) {
         Table storage t=_table(tableId);
@@ -201,6 +204,10 @@ contract FHEBluffReady {
         emit PlayerReady(tableId,t.handId,msg.sender);
         for(uint256 i;i<t.seats.length;++i)
             if(t.seats[i].state==PlayerState.Active && readyHand[tableId][t.seats[i].player]!=t.handId)return;
+        _startBetting(tableId,t);
+    }
+
+    function _startBetting(uint256 tableId,Table storage t) private {
         uint8 sb=_nextLive(t,t.dealer);uint8 bb=_nextLive(t,sb);
         _commit(t,sb,t.smallBlind);_commit(t,bb,t.smallBlind*2);t.currentBet=t.smallBlind*2;
         t.actingSeat=_nextLive(t,bb);t.phase=Phase.Preflop;

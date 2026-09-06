@@ -24,16 +24,17 @@ test('new deployment is explicit and old unversioned invitations remain legacy',
   const source=readFileSync(new URL('../lib/poker-deployment.tsx',import.meta.url),'utf8');
   const body=source.match(/export function resolveDeployment\(search:string\):DeploymentVersion\{([\s\S]*?)\n\}/)[1];
   const resolve=new Function('search',body);
-  assert.equal(resolve(''),'ready');
+  assert.equal(resolve(''),'instant');
   assert.equal(resolve('?table=8'),'legacy');
   assert.equal(resolve('?table=8&version=ready'),'ready');
-  assert.equal(resolve('?version=legacy'),'ready');
+  assert.equal(resolve('?version=legacy'),'instant');
+  assert.equal(resolve('?table=0&version=instant'),'instant');
 });
 test('readiness permits explicit early opt-in and permission cache includes deployment',()=>{
   const page=readFileSync(new URL('../app/play/page.tsx',import.meta.url),'utf8');
   assert.match(page,/onReady=\{\(\)=>\{if\(table\)transact\('confirmCardsReady',\[id,table\[6\]\]\)/);
   assert.match(page,/const isMyTurn=phase>=2&&phase<=5/);
-  assert.match(page,/url.searchParams.set\('version',readiness\?'ready':'legacy'\)/);
+  assert.match(page,/url.searchParams.set\('version',version\)/);
   const client=readFileSync(new URL('../lib/cofhe-client.ts',import.meta.url),'utf8');
   assert.match(client,/contract.toLowerCase\(\)/);
   assert.match(client,/createSelf\(\{issuer:account,contracts:\[contract\]/);

@@ -22,7 +22,8 @@ test('pending, acknowledged and expired starts cannot submit a duplicate readine
 });
 test('display IDs are stable and unique across deployments including large IDs',()=>{
   assert.equal(tableLabel(0n,'legacy'),'CLUB-001');assert.equal(tableLabel(0n),'SPADE-001');
-  const labels=['legacy','ready'].flatMap(version=>Array.from({length:1000},(_,i)=>tableLabel(BigInt(i),version)));
-  assert.equal(new Set(labels).size,2000);
+  const labels=['legacy','ready','instant'].flatMap(version=>Array.from({length:1000},(_,i)=>tableLabel(BigInt(i),version)));
+  assert.equal(new Set(labels).size,3000);
+  assert.equal(tableLabel(0n,'instant'),'HEART-001');
   assert.equal(tableLabel(999999999999999999n),'SPADE-1000000000000000000');
 });
