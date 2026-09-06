@@ -192,7 +192,7 @@ function PokerApp() {
             <TabsContent value="active" className="mt-5">{activeRows.length===0?<Empty icon={Activity} title="NO ACTIVE HANDS" body="Hands in progress will appear here with their current street and pot."/>:<div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">{activeRows.map(({id,data})=><TableCard key={id.toString()} id={id} data={data!} onOpen={()=>setSelected(id)}/>)}</div>}</TabsContent>
             <TabsContent value="history" className="mt-5"><HandHistory hands={handHistory} loading={historyLoading} error={historyError} onOpen={(id,version)=>window.location.assign(`/play?table=${id}&version=${version||'ready'}`)}/></TabsContent>
             <TabsContent value="credits" className="mt-5"><Profile address={address} credits={number(creditData)} authenticated={authenticated} login={login}/></TabsContent>
-            <TabsContent value="leaderboard" className="mt-5"><p className="mb-3 border-2 border-ink bg-cream p-3 text-sm">Your Credits include all completed games. Your connected wallet appears here even at zero; login-only profiles are not yet shared globally.</p><Leaderboard address={address} data={leaderData as readonly [readonly `0x${string}`[],readonly bigint[]]|undefined} /></TabsContent>
+            <TabsContent value="leaderboard" className="mt-5"><Leaderboard address={address} data={leaderData as readonly [readonly `0x${string}`[],readonly bigint[]]|undefined} /></TabsContent>
             <TabsContent value="privacy" className="mt-5"><PrivacyPanel /></TabsContent>
           </Tabs>
         </section>

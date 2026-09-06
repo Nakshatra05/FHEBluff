@@ -20,20 +20,24 @@ test('auto-start attempts once per eligible visible hand/wallet, never in backgr
 test('normal preparation has no required button and success removes the preparation panel',()=>{
   assert.doesNotMatch(render({}),/<button/);
   assert.equal(render({stage:'ready'}),'');
-  assert.match(render({stage:'authorizing',busy:true}),/permission signature/);
+  assert.equal(render({stage:'authorizing',busy:true}),'');
   assert.doesNotMatch(render({stage:'authorizing',busy:true}),/<button/);
 });
 
-test('protected deals explicitly keep chips and betting clock out of preparation',()=>{
+test('normal card loading has no status pill, timer or stop button',()=>{
   const html=render({stage:'decrypting',busy:true,elapsed:90,protectedDeal:true});
-  assert.match(html,/Betting has not started/);
-  assert.doesNotMatch(html,/betting clock is not paused/);
+  assert.equal(html,'');
 });
-test('only failed or stopped access exposes retry; slow legacy waits disclose active clock',()=>{
+test('only failed or stopped access exposes a compact retry control',()=>{
   assert.match(render({stage:'error',message:'Try again'}),/RETRY CARD ACCESS/);
   assert.match(render({stage:'idle',message:'Stopped'}),/RETRY CARD ACCESS/);
-  assert.match(render({stage:'decrypting',busy:true,elapsed:25}),/Card loading does not pause your turn clock/);
+  assert.equal(render({stage:'decrypting',busy:true,elapsed:25}),'');
   assert.doesNotMatch(render({stage:'decrypting',busy:true}),/RETRY CARD ACCESS/);
   const css=readFileSync(new URL('../app/globals.css',import.meta.url),'utf8');
   assert.match(css,/\.deal-motion \.card-back\{animation:none\}/);
+});
+
+test('leaderboard does not show the removed explanatory pill',()=>{
+  const page=readFileSync(new URL('../app/play/page.tsx',import.meta.url),'utf8');
+  assert.doesNotMatch(page,/Your Credits include all completed games|login-only profiles are not yet shared globally/);
 });
