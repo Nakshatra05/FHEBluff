@@ -12,7 +12,7 @@
 .launch-choice:hover { transform:translateY(-2px); }
 .launch-choice > span:nth-child(2) { flex:1; }
 .launch-choice strong { display:block; font-size:20px; }
-.launch-choice small { display:block; margin-top:4px; font-size:12px; opacity:.75; }
+.launch-choice small { display:block; margin-top:4px; font-size:14px; opacity:.85; }
 button:focus-visible,summary:focus-visible,a:focus-visible { outline:3px solid #6647f5; outline-offset:4px; }
 * { box-sizing:border-box; }
 html { scroll-behavior:smooth; }
@@ -38,56 +38,56 @@ button,a { -webkit-tap-highlight-color:transparent; }
 /* Table-first arena. Controls always remain in document flow. */
 .poker-layout { grid-template-rows:auto auto auto auto; min-height:0; gap:12px; padding:12px 16px 28px; }
 .poker-scene { display:grid; grid-template-columns:minmax(0,1fr) 220px; gap:16px; }
-.poker-felt { position:relative; display:grid; grid-template-rows:auto minmax(170px,1fr) auto; gap:12px; min-height:410px; padding:18px; border:3px solid #d8ff3e; border-radius:36px; background:#123f3a; box-shadow:0 6px 0 #d8ff3e, inset 0 0 0 8px #191917, inset 0 0 0 10px #ffffff20; }
+.poker-felt { position:relative; display:grid; grid-template-rows:auto minmax(170px,1fr) auto; gap:12px; min-height:440px; padding:18px; border:3px solid #d8ff3e; border-radius:0; background:#123f3a; box-shadow:0 6px 0 #d8ff3e, inset 0 0 0 8px #191917, inset 0 0 0 10px #ffffff20; }
 .arena-seats { display:flex; justify-content:space-evenly; gap:10px; position:relative; z-index:1; }
-.arena-seat { width:166px; min-width:0; border:2px solid #11100f; background:#fff8df; color:#11100f; padding:8px 10px 0; box-shadow:4px 4px 0 #11100f; }
+.arena-seat { width:186px; min-width:0; border:2px solid #11100f; background:#fff8df; color:#11100f; padding:8px 10px 0; box-shadow:4px 4px 0 #11100f; }
 .arena-seat-active { background:#d8ff3e; outline:2px solid #d8ff3e; outline-offset:4px; }
 .arena-seat-folded { background:#c1c9c6; }
 .seat-identity { display:flex; align-items:center; gap:7px; }
-.seat-identity b { font-size:12px; display:block; }
-.seat-identity small { font-size:10px; display:block; opacity:.65; }
+.seat-identity b { font-size:14px; display:block; }
+.seat-identity small { font-size:12px; display:block; opacity:.85; }
 .seat-avatar { display:grid; place-items:center; width:27px; height:27px; flex-shrink:0; background:#6647f5; color:white; font-size:22px; }
 .seat-stack { display:flex; gap:5px; align-items:baseline; padding:3px 0; }
-.seat-stack strong { font-size:20px; line-height:1.2; }
-.seat-stack > span { font-size:11px; opacity:.6; }
-.seat-foot { display:flex; justify-content:space-between; border-top:1px solid #11100f30; padding:3px 0; font-size:10px; gap:4px; }
+.seat-stack strong { font-size:26px; line-height:1.2; }
+.seat-stack > span { font-size:12px; opacity:.8; }
+.seat-foot { display:flex; justify-content:space-between; border-top:1px solid #11100f30; padding:3px 0; font-size:12px; gap:4px; }
 .arena-seat-active .seat-foot > span { font-weight:900; }
-.arena-seat-empty { display:flex; align-items:center; justify-content:center; gap:8px; border:1px dashed #ffffff50; background:transparent; box-shadow:none; color:#ffffff75; font-size:12px; min-height:54px; align-self:center; }
+.arena-seat-empty { display:flex; align-items:center; justify-content:center; gap:8px; border:1px dashed #ffffff50; background:transparent; box-shadow:none; color:#ffffff75; font-size:14px; min-height:54px; align-self:center; }
 .arena-board { display:grid; justify-items:center; align-content:center; gap:12px; min-width:0; }
-.arena-stage { display:flex; justify-content:center; flex-wrap:wrap; align-items:center; gap:7px; font-size:11px; font-weight:800; color:#d8ff3e; }
+.arena-stage { display:flex; justify-content:center; flex-wrap:wrap; align-items:center; gap:7px; font-size:12px; font-weight:800; color:#d8ff3e; }
 .arena-stage-divider { opacity:.4; }
 .arena-stage > span:last-child { color:#e6f3ed; font-weight:500; }
 .stage-dot { width:6px; height:6px; background:#d8ff3e; border-radius:50%; }
 .community-cards { display:flex; justify-content:center; gap:8px; }
-.playing-card { width:58px; height:82px; position:relative; display:grid; place-items:center; border:2px solid #11100f; border-radius:5px; box-shadow:3px 4px 0 #11100f; flex-shrink:0; font-weight:900; }
+.playing-card { width:64px; height:92px; position:relative; display:grid; place-items:center; border:2px solid #11100f; border-radius:0; box-shadow:3px 4px 0 #11100f; flex-shrink:0; font-weight:900; }
 .card-face { background:#fffdf4; color:#11100f; }
 .card-red { color:#c82c64; }
 .card-slot { border:1px dashed #ffffff40; background:#ffffff05; color:#ffffff24; box-shadow:none; }
 .card-back { background:#6647f5; color:#d8ff3e; outline:1px solid #ffffff40; outline-offset:-6px; }
-.card-back-label { position:absolute; bottom:9px; font-size:9px; letter-spacing:2px; }
+.card-back-label { position:absolute; bottom:9px; font-size:12px; letter-spacing:2px; }
 .card-corner { position:absolute; top:3px; left:5px; display:grid; font-size:14px; line-height:1; }
-.card-corner small { font-size:11px; }
+.card-corner small { font-size:12px; }
 .card-corner-bottom { inset:auto 5px 3px auto; transform:rotate(180deg); }
 .card-suit { font-size:28px; }
 .arena-pot { display:flex; align-items:center; gap:10px; color:#11100f; background:#d8ff3e; border:2px solid #11100f; padding:7px 18px; box-shadow:4px 4px 0 #11100f; transform:rotate(-2deg); }
 .arena-pot > svg { width:28px; height:28px; }
-.arena-pot small { display:block; font-size:10px; letter-spacing:2px; }
+.arena-pot small { display:block; font-size:12px; letter-spacing:2px; }
 .arena-pot strong { display:block; font-size:28px; line-height:1.1; }
-.arena-pot strong > span { font-size:12px; font-weight:500; opacity:.65; }
-.poker-scene > aside { max-height:430px; overflow:auto; border:2px solid #ffffff20; box-shadow:4px 4px 0 #6647f5; border-radius:4px; }
+.arena-pot strong > span { font-size:14px; font-weight:500; opacity:.65; }
+.poker-scene > aside { max-height:430px; overflow:auto; border:2px solid #ffffff20; box-shadow:4px 4px 0 #6647f5; border-radius:0; }
 .poker-scene > aside .font-heading { font-size:24px; }
-.poker-controls { position:static; display:grid; grid-template-columns:minmax(0,1fr); gap:8px; border-radius:8px; border-top:4px solid #6647f5; }
+.poker-controls { position:static; display:grid; grid-template-columns:minmax(0,1fr); gap:8px; border-radius:0; border-top:4px solid #6647f5; }
 .poker-controls > .private-hand { margin-bottom:0; gap:12px; }
-.poker-controls .playing-card { width:44px; height:64px; }
-.poker-controls .playing-card .card-corner { font-size:11px; }
+.poker-controls .playing-card { width:52px; height:76px; }
+.poker-controls .playing-card .card-corner { font-size:12px; }
 .poker-controls .playing-card .card-suit { font-size:20px; }
 .poker-controls .max-w-\[60\%\] { max-width:none; min-width:0; flex:1; }
-.poker-controls .max-w-\[60\%\] > p:last-child { font-size:11px; line-height:1.3; }
+.poker-controls .max-w-\[60\%\] > p:last-child { font-size:12px; line-height:1.3; }
 .poker-controls fieldset > div:first-child { margin-bottom:6px; }
-.poker-controls fieldset button { min-height:44px; padding-top:6px; padding-bottom:6px; }
+.poker-controls fieldset button { min-height:48px; padding-top:6px; padding-bottom:6px; }
 .poker-controls fieldset button > svg { display:inline; width:16px; height:16px; vertical-align:middle; }
 .betting-controls > details { padding:0 10px; }
-.betting-controls > details > summary { min-height:44px; padding:10px 0; font-size:13px; }
+.betting-controls > details > summary { min-height:44px; padding:10px 0; font-size:14px; }
 .betting-controls > details[open] { padding-bottom:10px; }
 @media(min-width:768px){
   .poker-controls { grid-template-columns:minmax(240px,.8fr) minmax(0,1.5fr); align-items:start; }
@@ -100,16 +100,53 @@ button,a { -webkit-tap-highlight-color:transparent; }
 }
 @media(max-width:600px){
   .poker-layout { padding:10px 10px 24px; gap:10px; }
-  .poker-felt { padding:14px 10px; border-radius:24px; min-height:390px; gap:14px; }
+  .poker-felt { padding:14px 10px; border-radius:0; min-height:420px; gap:14px; }
   .arena-seats { gap:6px; }
   .arena-seat { width:144px; padding:6px 5px 0; }
   .seat-avatar { display:none; }
-  .seat-identity b { font-size:10px; overflow-wrap:anywhere; }
-  .seat-identity small { font-size:9px; }
-  .seat-stack strong { font-size:18px; }
-  .seat-foot { font-size:9px; }
-  .arena-stage { font-size:10px; gap:4px; }
+  .seat-identity b { font-size:12px; overflow-wrap:anywhere; }
+  .seat-identity small { font-size:12px; }
+  .seat-stack strong { font-size:24px; }
+  .seat-foot { font-size:12px; }
+  .arena-stage { font-size:12px; gap:4px; }
   .community-cards { gap:5px; }
   .community-cards .playing-card { width:46px; height:70px; }
   .arena-pot strong { font-size:24px; }
+}
+
+
+/* Readable neo-brutalist hierarchy, including dense game surfaces. */
+.brutal-button { min-height:48px; border-radius:0; }
+.launch-choice { border-width:4px; box-shadow:6px 6px 0 #11100f; }
+.launch-choice strong { font-size:24px; }
+.launch-choice small { font-size:14px; line-height:1.45; }
+.table-list-card { border-width:4px; }
+.table-list-card h3 strong { font-size:40px; }
+.table-list-card small { font-size:14px; }
+.poker-felt { border-width:4px; background:#164d43; }
+.arena-seat { border-width:3px; }
+.poker-layout, .poker-scene, .poker-felt, .arena-seats { min-width:0; }
+.poker-felt { grid-template-columns:minmax(0,1fr); }
+.arena-seats > * { min-width:0; }
+.arena-stage { max-width:100%; min-width:0; text-align:center; }
+.seat-foot { border-top:2px solid #11100f; line-height:1.5; }
+.seat-stack { padding:5px 0; overflow-wrap:anywhere; flex-wrap:wrap; }
+.seat-identity > span:last-child { min-width:0; }
+.seat-identity b { font-size:14px; }
+.arena-stage { border:2px solid #d8ff3e; padding:6px 10px; background:#11100f; font-size:14px; }
+.arena-pot { border-width:3px; }
+.arena-pot strong { font-size:34px; }
+.poker-controls { border-width:3px; border-top-width:5px; }
+.poker-controls .private-hand { flex-wrap:wrap; }
+.poker-controls .private-hand > div:last-child { min-width:160px; }
+.poker-controls fieldset button { font-size:14px; }
+.table-guide { border-width:2px; }
+.table-guide summary { min-height:48px; font-size:14px; }
+.table-guide p { font-size:14px; }
+@media(max-width:600px){
+  .arena-seat { flex:1; max-width:160px; }
+  .seat-foot { flex-wrap:wrap; }
+  .arena-stage { font-size:12px; }
+  .community-cards .playing-card { width:48px; height:76px; }
+  .poker-controls .private-hand > div:last-child { min-width:140px; }
 }

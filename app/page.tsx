@@ -16,15 +16,15 @@ export default function Home() {
           <span className="grid size-10 place-items-center border-3 border-ink bg-acid shadow-hard-sm"><Spade className="size-5 fill-current" /></span>
           FHEBLUFF
         </Link>
-        <div className="hidden items-center gap-8 text-sm font-bold uppercase md:flex">
+        <div className="hidden items-center gap-8 text-base font-bold uppercase md:flex">
           <a href="#how">How it works</a><a href="#privacy">Privacy</a><a href="#tech">Network</a>
         </div>
-        <form action="/play"><button type="submit" className="brutal-button bg-pink px-4 py-2 text-sm">ENTER APP <ArrowUpRight className="size-4" /></button></form>
+        <form action="/play"><button type="submit" className="brutal-button bg-pink px-4 py-2 text-base">ENTER APP <ArrowUpRight className="size-4" /></button></form>
       </nav>
 
       <section className="relative mx-auto grid max-w-7xl border-x-3 border-ink px-4 py-14 sm:px-8 lg:grid-cols-[1.2fr_.8fr] lg:py-24">
         <div className="relative z-10">
-          <div className="mb-7 inline-flex rotate-[-2deg] items-center gap-2 border-3 border-ink bg-white px-4 py-2 text-xs font-black uppercase shadow-hard-sm">
+          <div className="mb-7 inline-flex rotate-[-2deg] items-center gap-2 border-3 border-ink bg-white px-4 py-2 text-sm font-black uppercase shadow-hard-sm">
             <span className="size-2.5 animate-pulse rounded-full bg-green" /> Live on Arbitrum Sepolia
           </div>
           <h1 className="max-w-4xl text-[clamp(4rem,10vw,8.5rem)] font-black uppercase leading-[.78] tracking-[-.075em]">
@@ -37,7 +37,7 @@ export default function Home() {
             <form action="/play"><button type="submit" className="brutal-button bg-acid px-7 py-4 text-base">ENTER APP <ArrowUpRight /></button></form>
             <Link href="/play?practice=1" className="brutal-button bg-white px-7 py-4 text-base">TRY POKER · NO WALLET</Link>
           </div>
-          <p className="mt-4 text-sm font-semibold">Start with a coached practice hand. Then join friends in encrypted multiplayer to earn Credits.</p>
+          <p className="mt-4 text-base font-semibold">Start with a coached practice hand. Then join friends in encrypted multiplayer to earn Credits.</p>
         </div>
         <div className="relative mt-20 min-h-[360px] lg:mt-0">
           <div className="absolute left-[5%] top-[22%] h-64 w-44 -rotate-12 border-4 border-ink bg-white p-4 shadow-hard-lg sm:left-[18%] sm:h-80 sm:w-56">
@@ -46,7 +46,7 @@ export default function Home() {
           <div className="absolute right-[3%] top-[5%] h-64 w-44 rotate-12 border-4 border-ink bg-purple p-4 shadow-hard-lg sm:right-[12%] sm:h-80 sm:w-56">
             <div className="text-4xl font-black text-white">K♥</div><EyeOff className="mx-auto mt-14 size-20 text-acid sm:mt-20" /><div className="mt-10 text-right text-4xl font-black text-white">♥K</div>
           </div>
-          <div className="absolute bottom-1 left-1/2 -translate-x-1/2 rotate-2 border-3 border-ink bg-acid px-5 py-3 font-mono text-xs font-bold shadow-hard-sm">0x9f…e31 // ENCRYPTED</div>
+          <div className="absolute bottom-1 left-1/2 -translate-x-1/2 rotate-2 border-3 border-ink bg-acid px-5 py-3 font-mono text-sm font-bold shadow-hard-sm">0x9f…e31 // ENCRYPTED</div>
         </div>
       </section>
 
@@ -55,7 +55,7 @@ export default function Home() {
           <p className="eyebrow text-acid">THE HAND, ONCHAIN</p>
           <h2 className="section-title max-w-3xl">Poker without the peek.</h2>
           <div className="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
-            {steps.map(([n, title, copy]) => <article key={n} className="border-3 border-ink bg-cream p-5 text-ink shadow-hard"><div className="mb-8 font-mono text-sm font-black text-purple">/{n}</div><h3 className="text-3xl font-black">{title}</h3><p className="mt-3 font-semibold leading-relaxed">{copy}</p></article>)}
+            {steps.map(([n, title, copy]) => <article key={n} className="border-3 border-ink bg-cream p-5 text-ink shadow-hard"><div className="mb-8 font-mono text-base font-black text-purple">/{n}</div><h3 className="text-3xl font-black">{title}</h3><p className="mt-3 font-semibold leading-relaxed">{copy}</p></article>)}
           </div>
         </div>
       </section>
@@ -79,7 +79,7 @@ export default function Home() {
           <form action="/play"><button type="submit" className="brutal-button shrink-0 bg-ink px-8 py-5 text-white">ENTER FHEBLUFF <ArrowUpRight /></button></form>
         </div>
       </section>
-      <footer className="border-t-3 border-ink bg-ink px-4 py-6 text-center font-mono text-xs font-bold uppercase tracking-wider text-white">FHEBLUFF · COFHE 0.7 · ARBITRUM SEPOLIA · CREDITS HAVE NO MONETARY VALUE</footer>
+      <footer className="border-t-3 border-ink bg-ink px-4 py-6 text-center font-mono text-sm font-bold uppercase tracking-wider text-white">FHEBLUFF · COFHE 0.7 · ARBITRUM SEPOLIA · CREDITS HAVE NO MONETARY VALUE</footer>
     </main>
   );
 }

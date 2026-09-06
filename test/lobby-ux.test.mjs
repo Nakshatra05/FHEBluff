@@ -10,6 +10,16 @@ const source=readFileSync(new URL('../components/poker/play-launchpad.tsx',impor
 const code=ts.transpileModule(source,{compilerOptions:{jsx:ts.JsxEmit.ReactJSX,module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
 const module={exports:{}};new Function('require','module','exports',code)(require,module,module.exports);
 const render=(props={})=>renderToStaticMarkup(React.createElement(module.exports.PlayLaunchpad,{practice:()=>{},quickSeat:()=>{},loading:false,hasSeat:false,...props}));
+test('dense UI metadata does not fall below the 12px type floor',()=>{
+  for(const file of ['app/play/page.tsx','components/poker/table-guide.tsx','components/poker/hand-history.tsx','components/poker/practice-table.tsx']){
+    const text=readFileSync(new URL('../'+file,import.meta.url),'utf8');
+    assert.doesNotMatch(text,/text-\[(?:[7-9]|10|11)px\]/);
+  }
+  const css=readFileSync(new URL('../app/globals.css',import.meta.url),'utf8');
+  for(const match of css.matchAll(/font-size:(\d+)px/g))assert.ok(Number(match[1])>=12);
+  assert.match(css,/\.brutal-button \{ min-height:48px; border-radius:0;/);
+  assert.match(css,/\.poker-felt \{ grid-template-columns:minmax\(0,1fr\);/);
+});
 test('new players get two immediate choices and an optional guide',()=>{
   const html=render();assert.equal((html.match(/<button/g)||[]).length,2);
   assert.match(html,/Practice a hand/);assert.match(html,/Play with friends/);

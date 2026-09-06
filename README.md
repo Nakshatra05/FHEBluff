@@ -125,6 +125,8 @@ node --test test/practice-poker.test.mjs
 
 ## Privacy and operational notes
 
+- The neo-brutalist UI uses square panels, hard shadows, 48px primary touch controls, and a 12px minimum for dense metadata. Body/help text and ordinary labels are larger. Controls stay below the table in document flow rather than covering it.
+
 - The lobby offers two immediate paths: wallet-free practice or multiplayer tables. Learning help and community statistics are collapsed by default. Desktop tabs and mobile navigation expose the same six views.
 - The wallet address opens an explicit profile/copy/logout menu; merely clicking the address no longer disconnects the player. Table cards distinguish free starting chips from the current pot and indicate occupied seats.
 

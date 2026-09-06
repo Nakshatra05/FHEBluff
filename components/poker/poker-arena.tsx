@@ -1,7 +1,7 @@
 import {Coins,LockKeyhole,Spade,Users} from 'lucide-react';
 
 export type ArenaSeat={player:string;stack:number;bet:number;state:number;active:boolean;credits:number};
-const short=(value:string)=>`${value.slice(0,6)}…${value.slice(-4)}`;
+const short=(value:string)=>`${value.slice(0,4)}…${value.slice(-3)}`;
 
 export function PlayingCard({value,hidden=false}:{value?:number;hidden?:boolean}){
   const valid=value!==undefined&&value>=0&&value<52;
@@ -20,7 +20,7 @@ export function PokerArena({seats,capacity,board,phase,status,pot,address}:{seat
     const player=seats[index];
     if(!player)return <div key={index} className="arena-seat arena-seat-empty"><Users size={18}/><span>Open seat</span></div>;
     const self=player.player.toLowerCase()===address?.toLowerCase();
-    return <div key={index} className={`arena-seat ${player.active?'arena-seat-active':''} ${player.state===1?'arena-seat-folded':''}`}>
+    return <div key={index} title={player.player} className={`arena-seat ${player.active?'arena-seat-active':''} ${player.state===1?'arena-seat-folded':''}`}>
       <div className="seat-identity"><span className="seat-avatar" aria-hidden="true">{['♠','♥','♦','♣'][index%4]}</span><span><b>{self?'YOU':short(player.player)}</b><small>{player.credits} CR{self?` · ${short(player.player)}`:''}</small></span></div>
       <div className="seat-stack"><strong>{player.stack.toLocaleString()}</strong><span>chips</span></div>
       <div className="seat-foot"><span>{player.state===1?'Folded':player.state===2?'All-in':player.state===3?'Sitting out':player.active?'To act':'In seat'}</span><b>Bet {player.bet}</b></div>
