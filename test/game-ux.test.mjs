@@ -13,7 +13,7 @@ test('equal Credit totals share a competition rank, regardless of list order',()
   assert.equal(competitionRank(9007199254740993n,[9007199254740994n,9007199254740993n]),2);
 });
 
-test('table controls remain in document flow and background cards cannot request new permission',()=>{
+test('table controls remain in document flow and explicit silent card reads cannot request new permission',()=>{
   const page=readFileSync(new URL('../app/play/page.tsx',import.meta.url),'utf8');
   const css=readFileSync(new URL('../app/globals.css',import.meta.url),'utf8');
   const view=readFileSync(new URL('../components/poker/use-private-cards.ts',import.meta.url),'utf8');

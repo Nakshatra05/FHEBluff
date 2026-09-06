@@ -8,6 +8,7 @@ import {authorizeCardView,createCardViewClient} from '@/lib/cofhe-client';
 import {POKER_ADDRESS,ARBITRUM_SEPOLIA_CHAIN_ID} from '@/lib/network';
 import {fheBluffAbi} from '@/lib/fhebluff-abi';
 import {withDeadline} from '@/lib/async-deadline';
+import {shouldAutoStartCards} from '@/lib/card-auto-start';
 
 type ViewState={key:string;stage:'idle'|'authorizing'|'decrypting'|'ready'|'error';message:string;cards:(number|undefined)[];started:number};
 export function usePrivateCards(id:bigint,handId:bigint|undefined,address:`0x${string}`|undefined,enabled:boolean){
@@ -59,10 +60,15 @@ export function usePrivateCards(id:bigint,handId:bigint|undefined,address:`0x${s
     }catch(error){
       if(!current())return;
       const rejected=error instanceof Error&&/reject|denied|cancel/i.test(error.message);
-      update('error',rejected?'Permission declined. Press Show my cards when you’re ready.':'Card viewing could not finish. CoFHE may still be processing the deal. Retry card viewing; no poker transaction is needed.');
+      update('error',rejected?'Permission declined. Retry card access when you’re ready.':'Card viewing could not finish. CoFHE may still be processing the deal. Retry card access; no poker transaction is needed.');
     }finally{run.cancelled=true;if(request.current===run)request.current=null;}
   },[address,enabled,id,key,publicClient,walletClient]);
-  useEffect(()=>{if(!enabled)return;const first=setTimeout(()=>void load(true),0);const afterStoreHydrates=setTimeout(()=>void load(true),2000);return()=>{clearTimeout(first);clearTimeout(afterStoreHydrates);};},[enabled,load]);
+  useEffect(()=>{
+    const start=()=>{if(shouldAutoStartCards(enabled,document.visibilityState==='visible',key,autoStarted.current))void load();};
+    const first=setTimeout(start,0);
+    document.addEventListener('visibilitychange',start);
+    return()=>{clearTimeout(first);document.removeEventListener('visibilitychange',start);};
+  },[enabled,key,load]);
   const stop=()=>{
     // Do not offer a second signature while an un-cancellable wallet prompt is open.
     if(view?.stage!=='decrypting')return;

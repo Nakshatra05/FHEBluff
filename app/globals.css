@@ -161,4 +161,7 @@ button,a { -webkit-tap-highlight-color:transparent; }
   .community-cards .playing-card { width:48px; height:76px; }
   .poker-controls .private-hand > div:last-child { min-width:140px; }
 }
-@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.brutal-button,.launch-choice{transition:none}.brutal-button:hover,.brutal-button:active,.launch-choice:hover{transform:none}}
+.deal-motion .card-back { animation:private-deal 1.8s ease-in-out infinite; }
+.deal-motion .card-back:nth-child(2) { animation-delay:.25s; }
+@keyframes private-deal { 0%,100% { transform:translateY(0) rotate(0deg); } 30% { transform:translateY(-8px) rotate(-5deg); } 65% { transform:translateY(-3px) rotate(4deg); } }
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.brutal-button,.launch-choice{transition:none}.brutal-button:hover,.brutal-button:active,.launch-choice:hover{transform:none}.deal-motion .card-back{animation:none}}
