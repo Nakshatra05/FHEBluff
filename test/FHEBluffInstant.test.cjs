@@ -24,6 +24,21 @@ describe('FHEBluffInstant',function(){
       expect(await clients[i].decryptForView(handles[0],FheTypes.Uint8).execute()).lessThan(52n);
       await expect(clients[1-i].decryptForView(handles[0],FheTypes.Uint8).execute()).rejected;
     }
+    await game.connect([a,b][Number((await game.getTableView(0))[9])]).act(0,1,0);
+    for(let stage=3;stage<=5;stage++){
+      expect((await game.getTableView(0))[5]).eq(BigInt(stage));
+      expect((await game.getTableView(0))[10]).eq(0n);
+      await hre.network.provider.send('evm_increaseTime',[180]);await hre.network.provider.send('evm_mine');
+      await expect(game.forceTimeoutFold(0)).revertedWithCustomError(game,'InvalidPhase');
+      const handles=await game.getCommunityHandles(0);
+      const proofs=await Promise.all(handles.map(h=>clients[0].decryptForTx(h).withoutACP().execute()));
+      await game.publishCommunity(0,proofs.map(p=>p.decryptedValue),proofs.map(p=>p.signature));
+      const published=await hre.ethers.provider.getBlock('latest');
+      const deadline=(await game.getTableView(0))[10];expect(deadline).eq(BigInt(published.timestamp+120));
+      await expect(game.publishCommunity(0,[],[])).revertedWithCustomError(game,'BadReveal');
+      expect((await game.getTableView(0))[10]).eq(deadline);
+      if(stage<5)for(let move=0;move<2;move++)await game.connect([a,b][Number((await game.getTableView(0))[9])]).act(0,1,0);
+    }
     await game.connect([a,b][Number((await game.getTableView(0))[9])]).act(0,0,0);
     expect((await game.getTableView(0))[5]).eq(7n);
     await expect(game.act(0,0,0)).revertedWithCustomError(game,'InvalidPhase');

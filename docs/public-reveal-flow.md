@@ -1,0 +1,11 @@
+# Background public reveals — September 7, 2026
+
+New tables use `FHEBluffInstant` at `0xa6B08ad65B2935A0520D4B5A5Dca1EC7B2b775A1` on Arbitrum Sepolia (421614), deployment block 306151862. Invitations use `version=flow`; display IDs start with DIAMOND. Prior HEART/SPADE/CLUB invitations remain bound to their original contracts, with shared history and accumulated Credits.
+
+The client automatically requests threshold-signed proofs when a street or showdown is authorized, not when the reveal button is pressed. Requests run concurrently on an independent CoFHE client. Successful results are cached in memory for this hand/street only. Read requests have deadlines and bounded retries, followed by a visible reconnect state; changing tables, accounts, chains or phases invalidates old work. No automatic transactions or signatures are submitted. Clicking Reveal uses prepared proofs and still requires one wallet transaction. Simulation and fee estimation run concurrently with 15-second deadlines; timed-out reads cannot subsequently send a transaction.
+
+The new contract leaves the action deadline at zero while the public board is pending. A valid publication starts a fresh 120-second turn. Empty or repeated publications revert, preventing clock-reset abuse. Old deployed contracts cannot be patched in place and retain their old clock behavior.
+
+This does not remove CoFHE computation, threshold-network latency or transaction confirmation time. It does not grant early access to future community cards, disclose private hole cards, or replace encryption with plaintext. Public proofs use the official `decryptForTx(...).withoutACP()` flow only after the contract grants public access: https://cofhe-docs.fhenix.zone/tutorials/migrating-from-fhe-decrypt
+
+Validation: contract regressions cover automatic preflop, own-card access/opponent denial, delayed flop/turn/river publication without timeout penalties, publication clock start and duplicate rejection. Frontend regression checks cover background-only reads, cached proof submission, retry cancellation, deployment routing and unique labels. Local production build passes. Fresh multiplayer latency on the public CoFHE network has not been benchmarked; do not describe reveals as instant.

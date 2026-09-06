@@ -24,10 +24,11 @@ test('new deployment is explicit and old unversioned invitations remain legacy',
   const source=readFileSync(new URL('../lib/poker-deployment.tsx',import.meta.url),'utf8');
   const body=source.match(/export function resolveDeployment\(search:string\):DeploymentVersion\{([\s\S]*?)\n\}/)[1];
   const resolve=new Function('search',body);
-  assert.equal(resolve(''),'instant');
+  assert.equal(resolve(''),'flow');
   assert.equal(resolve('?table=8'),'legacy');
   assert.equal(resolve('?table=8&version=ready'),'ready');
-  assert.equal(resolve('?version=legacy'),'instant');
+  assert.equal(resolve('?version=legacy'),'flow');
+  assert.equal(resolve('?table=0&version=flow'),'flow');
   assert.equal(resolve('?table=0&version=instant'),'instant');
 });
 test('readiness permits explicit early opt-in and permission cache includes deployment',()=>{

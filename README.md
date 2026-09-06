@@ -7,9 +7,9 @@
 ## Live deployment
 
 - Network: Arbitrum Sepolia (`421614`)
-- Contract: [`0xD3d9866cE74B7928beDdD2397441E68191770a2C`](https://sepolia.arbiscan.io/address/0xD3d9866cE74B7928beDdD2397441E68191770a2C)
-- Source verification: [Sourcify contract page](https://repo.sourcify.dev/421614/0xD3d9866cE74B7928beDdD2397441E68191770a2C)
-- Seeded lobby: Table `#0`, six seats, 10/20 blinds, 1,000 minimum buy-in
+- Current new-table contract: [`0xa6B08ad65B2935A0520D4B5A5Dca1EC7B2b775A1`](https://sepolia.arbiscan.io/address/0xa6B08ad65B2935A0520D4B5A5Dca1EC7B2b775A1), deployment block `306151862`; DIAMOND table IDs, `version=flow` invitations.
+- [Background reveals and protected street clocks](docs/public-reveal-flow.md): implementation, migration and validation limitations.
+- Original contract retained for history: [`0xD3d9866cE74B7928beDdD2397441E68191770a2C`](https://sepolia.arbiscan.io/address/0xD3d9866cE74B7928beDdD2397441E68191770a2C). Its [Sourcify verification](https://repo.sourcify.dev/421614/0xD3d9866cE74B7928beDdD2397441E68191770a2C) applies only to that original deployment.
 - CoFHE client / React SDK: `0.7.1`
 - CoFHE contracts: `0.2.0`
 

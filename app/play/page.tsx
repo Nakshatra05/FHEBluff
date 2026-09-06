@@ -18,6 +18,8 @@ import { TransactionNotice } from '@/components/poker/transaction-notice';
 import { PokerArena, PlayingCard } from '@/components/poker/poker-arena';
 import { HandHistory } from '@/components/poker/hand-history';
 import { usePrivateCards } from '@/components/poker/use-private-cards';
+import { usePublicReveal } from '@/components/poker/use-public-reveal';
+import { withDeadline } from '@/lib/async-deadline';
 import { useCreditsBoard } from '@/components/poker/use-credits-board';
 import {publicHandRecap,type PublicHandRecap} from '@/lib/public-hand-recap';
 import { buildDealCalls, DEAL_ROUTER } from '@/lib/deal-batch';
@@ -196,7 +198,7 @@ function PokerApp() {
           </Tabs>
         </section>
       </div>
-      {selected!==null && <GameTable key={selected.toString()} id={selected} address={address} close={()=>{if(version!=='instant'){window.location.assign('/play');return;}setSelected(null);window.history.replaceState(null,'','/play');}} transact={transact} busy={submissionLocked} notify={setNotice} />}
+      {selected!==null && <GameTable key={selected.toString()} id={selected} address={address} close={()=>{if(version!=='flow'){window.location.assign('/play');return;}setSelected(null);window.history.replaceState(null,'','/play');}} transact={transact} busy={submissionLocked} notify={setNotice} />}
       {practiceOpen&&<PracticeTable close={()=>setPracticeOpen(false)} playRanked={()=>{setPracticeOpen(false);quickSeat();}}/>}
       <nav aria-label="Main navigation" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t-3 border-ink bg-cream sm:hidden">{([['tables',Users,'Lobby'],['active',Activity,'Hands'],['history',History,'History'],['credits',Coins,'Credits'],['leaderboard',Trophy,'Ranks'],['privacy',ShieldCheck,'Privacy']] as const).map(([value,Icon,label])=><button aria-current={appView===value?'page':undefined} onClick={()=>setAppView(value)} key={value} className={`grid min-h-16 place-items-center text-xs font-black ${appView===value?'bg-acid':''}`}><Icon className="size-5" />{label}</button>)}</nav>
     </main>
@@ -298,6 +300,7 @@ function GameTable({id,address,close,transact,busy,notify}:{id:bigint,address?:`
   const recover=recoveryAction(phase,number(table?.[10]),now,seats?.[3][number(table?.[9])],revealed);
   const expectedBoard=phase===3?3:phase===4?4:phase===5?5:0;
   const needsBoardReveal=expectedBoard>revealed;
+  const publicReveal=usePublicReveal(id,table?.[6],phase,revealed,me>=0&&(needsBoardReveal||phase===6));
   const allInRunout=seats ? seats[3].every(state=>state!==0) : false;
   const revealLabel=allInRunout?'RUN OUT BOARD':phase===3?'REVEAL FLOP':phase===4?'REVEAL TURN':'REVEAL RIVER';
   const privateBusy=privateLocked;
@@ -320,8 +323,8 @@ function GameTable({id,address,close,transact,busy,notify}:{id:bigint,address?:`
   const freshPrivateWrite=async(request:Parameters<typeof writePrivate>[0])=>{
     if(!publicClient||!address)throw new Error('Network client unavailable');
     if(!walletClient||walletClient.chain.id!==ARBITRUM_SEPOLIA_CHAIN_ID||walletClient.account.address.toLowerCase()!==address.toLowerCase())throw new Error('Switch to your connected wallet on Arbitrum Sepolia');
-    await publicClient.simulateContract({...request,account:address} as never);
-    const fees=await publicClient.estimateFeesPerGas({type:'eip1559'});
+    setPrivacyStatus('Checking the move and current network fees…');
+    const [,fees]=await Promise.all([withDeadline(publicClient.simulateContract({...request,account:address} as never),15000),withDeadline(publicClient.estimateFeesPerGas({type:'eip1559'}),15000)]);
     setPrivacyStatus('Check your wallet to continue.');
     notify({kind:'pending',title:'Your wallet is ready',message:'Open your wallet to approve or cancel this request.'});
     const hash=await writePrivate({...request,maxFeePerGas:fees.maxFeePerGas*2n,maxPriorityFeePerGas:fees.maxPriorityFeePerGas} as never);
@@ -345,7 +348,7 @@ function GameTable({id,address,close,transact,busy,notify}:{id:bigint,address?:`
   const prepareEncryptedCards=async()=>{setPrivacyStatus('Generating private entropy and ZK proof…');await connectCofhe();const words=new BigUint64Array(2);crypto.getRandomValues(words);const entropy=(words[0]<<64n)|words[1];const [handle,proof]=await cofheClient.encryptInputs([Encryptable.uint128(entropy)]).setConsumingContract(POKER_ADDRESS).execute();await freshPrivateWrite({address:POKER_ADDRESS,abi:fheBluffAbi,functionName:'submitEntropy',args:[id,handle,proof]});setPrivacyStatus('Deal contribution confirmed. Preparing your gas-free card permission now…');notify({kind:'pending',title:'Prepare card access',message:'Approve the gas-free card permission if asked. This prepares access while the encrypted deal runs.'});await authorizeCardView(cofheClient,address!,POKER_ADDRESS);setPrivacyStatus('Card permission ready. Your cards will load automatically after the deal.');notify({kind:'success',title:'Card access prepared',message:'No further card-view signature is needed while this permission remains valid.'});};
   const submitEncryptedEntropy=()=>void runPrivateTask(prepareEncryptedCards);
   const startAndPrepare=()=>void runPrivateTask(async()=>{await freshPrivateWrite({address:POKER_ADDRESS,abi:fheBluffAbi,functionName:'startHand',args:[id]});await prepareEncryptedCards();});
-  const publishReveal=(showdown=false)=>void runPrivateTask(async()=>{setPrivacyStatus('Requesting threshold-signed reveal…');await connectCofhe();const functionName=showdown?'getShowdownHandles':'getCommunityHandles';const handles=await publicClient!.readContract({address:POKER_ADDRESS,abi:fheBluffAbi,functionName,args:[id]}) as readonly `0x${string}`[];const revealed=await Promise.all(handles.map(h=>cofheClient.decryptForTx(h).withoutACP().execute()));await freshPrivateWrite({address:POKER_ADDRESS,abi:fheBluffAbi,functionName:showdown?'settleShowdown':'publishCommunity',args:[id,revealed.map(x=>Number(x.decryptedValue)),revealed.map(x=>x.signature)]} as never);setPrivacyStatus(showdown?'Hand settled.':'Board revealed.');});
+  const publishReveal=(showdown=false)=>{if(!publicReveal.ready)return;void runPrivateTask(async()=>{notify({kind:'pending',title:'Checking the reveal',message:'The card proofs are ready. Checking the transaction before wallet approval.'});await freshPrivateWrite({address:POKER_ADDRESS,abi:fheBluffAbi,functionName:showdown?'settleShowdown':'publishCommunity',args:[id,publicReveal.proofs.map(x=>Number(x.decryptedValue)),publicReveal.proofs.map(x=>x.signature)]} as never);setPrivacyStatus(showdown?'Hand settled.':'Board revealed.');});};
   if(phase===7)return <div className="fixed inset-0 z-50 overflow-y-auto bg-purple p-4 sm:p-8"><div className="mx-auto max-w-4xl py-6 sm:py-12"><HandResultPanel key={`${id}:${table?.[6]}`} handId={table?.[6]??0n} result={lastResult?.tableId===id?lastResult:null} address={address} seated={!!address&&!!lastResult?.participants?.some(player=>player.toLowerCase()===address.toLowerCase())} folded={seats?.[3][me]===1} onLobby={close}/></div></div>;
   return <div className="fixed inset-0 z-50 overflow-y-auto bg-[#191917] text-white"><header className="sticky top-0 z-20 flex items-center justify-between border-b-3 border-white/25 bg-ink px-3 py-3 sm:px-6"><button onClick={close} className="flex items-center gap-2 font-black"><ArrowLeft/> LOBBY</button><div className="text-center"><p className="font-mono text-xs text-acid">{tableLabel(id,version)}</p><p className="font-black">{stage}</p></div><div className="border-2 border-acid px-3 py-2 font-mono text-sm">POT {number(table?.[7])}</div></header><div className="poker-layout mx-auto grid max-w-7xl">
     {phase===7?<HandResultPanel key={`${id}:${table?.[6]}`} handId={table?.[6]??0n} result={lastResult?.tableId===id?lastResult:null} address={address} seated={!!address&&!!lastResult?.participants?.some(player=>player.toLowerCase()===address.toLowerCase())} folded={seats?.[3][me]===1} onLobby={close}/>:<TableGuide phase={phase} seated={me>=0} host={address?.toLowerCase()===table?.[0].toLowerCase()} players={number(table?.[4])} full={tableFull} submitted={!!entropySubmitted} batches={shuffleBatches===0?0:smallBatches?shuffleBatches:1} myTurn={isMyTurn} due={Math.min(number(seats?.[1][me]),Math.max(0,number(table?.[8])-number(seats?.[2][me])))} boardPending={needsBoardReveal} folded={seats?.[3][me]===1} allIn={seats?.[3][me]===2} busy={busy||privateBusy}/>}
@@ -377,8 +380,7 @@ function GameTable({id,address,close,transact,busy,notify}:{id:bigint,address?:`
       : entropySubmitted ? <div className="border-3 border-ink bg-white p-4 text-center font-black">READY · WAITING FOR OTHER PLAYERS</div>
       : <button disabled={privateBusy} onClick={submitEncryptedEntropy} className="brutal-button w-full bg-purple py-4 text-white disabled:cursor-wait disabled:opacity-50"><LockKeyhole/> {privateBusy?'TRANSACTION IN PROGRESS':'PREPARE MY DEAL'}</button>
       : phase===9 ? <ReadyToPlay cardsVisible={cardView.stage==='ready'} acknowledged={!!cardsAcknowledged} busy={busy||privateBusy} expired={timedOut} seconds={secondsLeft} onReady={()=>{if(table)transact('confirmCardsReady',[id,table[6]]);}} onClose={()=>transact('abortStalledHand',[id])}/>
-      : phase===6 ? <button disabled={privateBusy} onClick={()=>publishReveal(true)} className="brutal-button w-full bg-pink py-4 disabled:cursor-wait disabled:opacity-50"><ShieldCheck/> {privateBusy?'FINDING WINNER…':'SHOW WINNER · AWARD CREDITS'}</button>
-      : needsBoardReveal ? <button disabled={privateBusy} onClick={()=>publishReveal(false)} className="brutal-button w-full bg-green py-4 disabled:cursor-wait disabled:opacity-50"><ShieldCheck/> {privateBusy?'REVEALING…':revealLabel}</button>
+      : phase===6||needsBoardReveal ? <div role="status"><p className="mb-2 text-base font-bold">{privateBusy?privacyStatus:publicReveal.message}</p><button disabled={privateBusy||!publicReveal.ready} onClick={()=>publishReveal(phase===6)} className="brutal-button w-full bg-green py-4 disabled:opacity-50"><ShieldCheck/> {privateBusy?'CONFIRMING REVEAL…':publicReveal.ready?(phase===6?'SHOW WINNER · AWARD CREDITS':revealLabel):'PREPARING AUTOMATICALLY…'}</button></div>
       : <><div className="mb-2 grid grid-cols-2 gap-2">{recover==='forceTimeoutFold'?<button onClick={()=>transact('forceTimeoutFold',[id])} className="min-h-12 border-2 border-ink bg-pink px-3 py-2 text-sm font-black">SKIP TIMED-OUT PLAYER</button>:<div className="grid place-items-center border-2 border-ink bg-white px-2 text-center font-mono text-xs font-bold">{isMyTurn?<span className="flex items-center gap-1 text-purple"><Timer className="size-3"/> YOUR MOVE · {secondsLeft}s</span>:'WAITING FOR PLAYER'}</div>}</div>{isMyTurn?<BettingControls key={`${table?.[6]}:${phase}:${number(table?.[8])}`} stack={number(seats?.[1][me])} bet={number(seats?.[2][me])} currentBet={number(table?.[8])} pot={number(table?.[7])} bigBlind={number(table?.[2])*2} onMove={makeMove}/>:<div className="border-3 border-ink bg-white p-3 text-center text-base font-black">Your buttons appear when it’s your turn.</div>}</>}
       </fieldset>
     </div>
