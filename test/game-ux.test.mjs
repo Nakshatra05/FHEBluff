@@ -10,7 +10,9 @@ test('table controls remain in document flow and background cards cannot request
   const page=readFileSync(new URL('../app/play/page.tsx',import.meta.url),'utf8');
   const css=readFileSync(new URL('../app/globals.css',import.meta.url),'utf8');
   const view=readFileSync(new URL('../components/poker/use-private-cards.ts',import.meta.url),'utf8');
-  assert.match(page,/aria-label="Poker table"/);
+  const arena=readFileSync(new URL('../components/poker/poker-arena.tsx',import.meta.url),'utf8');
+  assert.match(arena,/aria-label="Poker table"/);
+  assert.doesNotMatch(page,/TableAudio/);
   assert.match(page,/aria-label="Game controls" className="poker-controls/);
   assert.match(css,/\.poker-controls \{ position:static;/);
   assert.doesNotMatch(page,/sm:sticky/);
