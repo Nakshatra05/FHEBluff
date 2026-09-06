@@ -14,7 +14,7 @@ test('one history fetches both deployments without presenting a version switch',
 });
 test('card permission is prepared after the contribution and reused by later card access',()=>{
   const page=readFileSync(new URL('../app/play/page.tsx',import.meta.url),'utf8');
-  const start=page.indexOf('const submitEncryptedEntropy');
+  const start=page.indexOf('const prepareEncryptedCards');
   const end=page.indexOf('const publishReveal',start);
   const flow=page.slice(start,end);
   assert.ok(flow.indexOf("functionName:'submitEntropy'")<flow.indexOf('await authorizeCardView('));

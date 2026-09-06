@@ -15,10 +15,10 @@ import { TableGuide } from '@/components/poker/table-guide';
 import { BettingControls } from '@/components/poker/betting-controls';
 import { TransactionNotice } from '@/components/poker/transaction-notice';
 import { PokerArena, PlayingCard } from '@/components/poker/poker-arena';
-import { PokerMascot } from '@/components/poker/poker-mascot';
 import { HandHistory } from '@/components/poker/hand-history';
 import { usePrivateCards } from '@/components/poker/use-private-cards';
 import { useCreditsBoard } from '@/components/poker/use-credits-board';
+import {publicHandRecap,type PublicHandRecap} from '@/lib/public-hand-recap';
 import { buildDealCalls, DEAL_ROUTER } from '@/lib/deal-batch';
 import { isOpenTable, recoveryAction } from '@/lib/table-lifecycle';
 import { transactionError, type TransactionFeedback } from '@/lib/transaction-feedback';
@@ -33,7 +33,7 @@ import {deployments,resolveDeployment,PokerDeploymentContext,usePokerDeployment,
 
 type TableView = readonly [`0x${string}`, number, bigint, bigint, number, number, bigint, bigint, bigint, number, bigint];
 type AppView = 'tables'|'active'|'history'|'credits'|'leaderboard'|'privacy';
-type HandResult = { tableId:bigint; handId:bigint; winners:readonly `0x${string}`[]; pot:bigint; transactionHash:`0x${string}`; voided?:boolean;blockNumber?:bigint;method?:string;participants?:readonly string[];version?:DeploymentVersion };
+type HandResult = { tableId:bigint; handId:bigint; winners:readonly `0x${string}`[]; pot:bigint; transactionHash:`0x${string}`; voided?:boolean;blockNumber?:bigint;method?:string;participants?:readonly string[];version?:DeploymentVersion;recap?:PublicHandRecap };
 type ActionEntry = { player:`0x${string}`; action:number; amount:bigint; transactionHash:`0x${string}` };
 const short = (v?: string) => v ? `${v.slice(0,6)}…${v.slice(-4)}` : '—';
 const number = (v: bigint | number | undefined) => Number(v || 0);
@@ -262,8 +262,11 @@ function GameTable({id,address,close,transact,busy,notify}:{id:bigint,address?:`
           const blockNumber=latest.blockNumber-1n;
           const [snapshot,players]=await Promise.all([publicClient.readContract({address:POKER_ADDRESS,abi:fheBluffAbi,functionName:'getTableView',args:[id],blockNumber}),publicClient.readContract({address:POKER_ADDRESS,abi:fheBluffAbi,functionName:'getSeats',args:[id],blockNumber})]);
           const participants=snapshot[6]===result.handId&&snapshot[5]>=2&&snapshot[5]<=6?players[0].filter((_,i)=>players[3][i]!==3):undefined;
-          metadata.set(result.transactionHash,{method,participants});
-          if(!cancelled)setLastResult({...result,method,participants});
+          const board=await publicClient.readContract({address:POKER_ADDRESS,abi:fheBluffAbi,functionName:'getCommunityCards',args:[id],blockNumber});
+          const values=method==='settleShowdown'&&decoded.functionName==='settleShowdown'&&decoded.args[0]===id?decoded.args[1]:undefined;
+          const recap=snapshot[6]===result.handId?publicHandRecap(board,players[0],players[3],values):undefined;
+          metadata.set(result.transactionHash,{method,participants,recap});
+          if(!cancelled)setLastResult({...result,method,participants,recap});
         }catch{/* Optional explanation failure must never hide a verified winner. */}
       }catch{/* Retry results independently of activity feed failures. */}
       finally{readingResult=false;}
@@ -314,6 +317,7 @@ function GameTable({id,address,close,transact,busy,notify}:{id:bigint,address?:`
   };
   const freshPrivateWrite=async(request:Parameters<typeof writePrivate>[0])=>{
     if(!publicClient||!address)throw new Error('Network client unavailable');
+    if(!walletClient||walletClient.chain.id!==ARBITRUM_SEPOLIA_CHAIN_ID||walletClient.account.address.toLowerCase()!==address.toLowerCase())throw new Error('Switch to your connected wallet on Arbitrum Sepolia');
     await publicClient.simulateContract({...request,account:address} as never);
     const fees=await publicClient.estimateFeesPerGas({type:'eip1559'});
     setPrivacyStatus('Check your wallet to continue.');
@@ -326,6 +330,7 @@ function GameTable({id,address,close,transact,busy,notify}:{id:bigint,address?:`
     if(receipt.status!=='success')throw new Error('Transaction reverted');
     notify({kind:'success',title:'Move confirmed',message:'Your action is confirmed onchain.',hash});
     await Promise.allSettled([refetchView(),refetchSeats(),refetchCommunity(),refetchShuffle(),refetchEntropy()]);
+    privateSubmittedHash.current=undefined;
   };
   const advanceEncryptedShuffle=()=>void runPrivateTask(async()=>{
     setPrivacyStatus(smallBatches?'Preparing a smaller deal batch…':'Combining the private deal into one confirmation…');
@@ -335,7 +340,9 @@ function GameTable({id,address,close,transact,busy,notify}:{id:bigint,address?:`
     else await freshPrivateWrite({address:DEAL_ROUTER,abi:multicall3Abi,functionName:'aggregate3',args:[buildDealCalls(POKER_ADDRESS,id,remaining)]} as never);
     setPrivacyStatus(smallBatches?'Deal batch confirmed.':'Private deal confirmed. View your cards below.');
   });
-  const submitEncryptedEntropy=()=>void runPrivateTask(async()=>{setPrivacyStatus('Generating private entropy and ZK proof…');await connectCofhe();const words=new BigUint64Array(2);crypto.getRandomValues(words);const entropy=(words[0]<<64n)|words[1];const [handle,proof]=await cofheClient.encryptInputs([Encryptable.uint128(entropy)]).setConsumingContract(POKER_ADDRESS).execute();await freshPrivateWrite({address:POKER_ADDRESS,abi:fheBluffAbi,functionName:'submitEntropy',args:[id,handle,proof]});setPrivacyStatus('Deal contribution confirmed. Preparing your gas-free card permission now…');notify({kind:'pending',title:'Prepare card access',message:'Approve the gas-free card permission if asked. This prepares access while the encrypted deal runs.'});await authorizeCardView(cofheClient,address!,POKER_ADDRESS);setPrivacyStatus('Card permission ready. Your cards will load automatically after the deal.');notify({kind:'success',title:'Card access prepared',message:'No further card-view signature is needed while this permission remains valid.'});});
+  const prepareEncryptedCards=async()=>{setPrivacyStatus('Generating private entropy and ZK proof…');await connectCofhe();const words=new BigUint64Array(2);crypto.getRandomValues(words);const entropy=(words[0]<<64n)|words[1];const [handle,proof]=await cofheClient.encryptInputs([Encryptable.uint128(entropy)]).setConsumingContract(POKER_ADDRESS).execute();await freshPrivateWrite({address:POKER_ADDRESS,abi:fheBluffAbi,functionName:'submitEntropy',args:[id,handle,proof]});setPrivacyStatus('Deal contribution confirmed. Preparing your gas-free card permission now…');notify({kind:'pending',title:'Prepare card access',message:'Approve the gas-free card permission if asked. This prepares access while the encrypted deal runs.'});await authorizeCardView(cofheClient,address!,POKER_ADDRESS);setPrivacyStatus('Card permission ready. Your cards will load automatically after the deal.');notify({kind:'success',title:'Card access prepared',message:'No further card-view signature is needed while this permission remains valid.'});};
+  const submitEncryptedEntropy=()=>void runPrivateTask(prepareEncryptedCards);
+  const startAndPrepare=()=>void runPrivateTask(async()=>{await freshPrivateWrite({address:POKER_ADDRESS,abi:fheBluffAbi,functionName:'startHand',args:[id]});await prepareEncryptedCards();});
   const publishReveal=(showdown=false)=>void runPrivateTask(async()=>{setPrivacyStatus('Requesting threshold-signed reveal…');await connectCofhe();const functionName=showdown?'getShowdownHandles':'getCommunityHandles';const handles=await publicClient!.readContract({address:POKER_ADDRESS,abi:fheBluffAbi,functionName,args:[id]}) as readonly `0x${string}`[];const revealed=await Promise.all(handles.map(h=>cofheClient.decryptForTx(h).withoutACP().execute()));await freshPrivateWrite({address:POKER_ADDRESS,abi:fheBluffAbi,functionName:showdown?'settleShowdown':'publishCommunity',args:[id,revealed.map(x=>Number(x.decryptedValue)),revealed.map(x=>x.signature)]} as never);setPrivacyStatus(showdown?'Hand settled.':'Board revealed.');});
   if(phase===7)return <div className="fixed inset-0 z-50 overflow-y-auto bg-purple p-4 sm:p-8"><div className="mx-auto max-w-4xl py-6 sm:py-12"><HandResultPanel key={`${id}:${table?.[6]}`} handId={table?.[6]??0n} result={lastResult?.tableId===id?lastResult:null} address={address} seated={!!address&&!!lastResult?.participants?.some(player=>player.toLowerCase()===address.toLowerCase())} folded={seats?.[3][me]===1} onLobby={close}/></div></div>;
   return <div className="fixed inset-0 z-50 overflow-y-auto bg-[#191917] text-white"><header className="sticky top-0 z-20 flex items-center justify-between border-b-3 border-white/25 bg-ink px-3 py-3 sm:px-6"><button onClick={close} className="flex items-center gap-2 font-black"><ArrowLeft/> LOBBY</button><div className="text-center"><p className="font-mono text-xs text-acid">TABLE #{id.toString()}</p><p className="font-black">{stage}</p></div><div className="border-2 border-acid px-3 py-2 font-mono text-sm">POT {number(table?.[7])}</div></header><div className="poker-layout mx-auto grid max-w-7xl">
@@ -344,7 +351,6 @@ function GameTable({id,address,close,transact,busy,notify}:{id:bigint,address?:`
     <div className="poker-scene">
       <PokerArena capacity={number(table?.[1])} phase={stage} status={tableStatus} pot={number(table?.[7])} address={address} board={community||[]} seats={(seats?.[0]||[]).map((player,i)=>({player,stack:number(seats?.[1][i]),bet:number(seats?.[2][i]),state:seats?.[3][i]||0,active:phase>=2&&phase<=5&&!needsBoardReveal&&number(table?.[9])===i,credits:seatCredits[i]||0}))}/>
       <aside className="border-3 border-white/25 bg-ink p-3 shadow-[5px_5px_0_#6c45ff]">
-        <PokerMascot/>
         <div className="flex items-center justify-between border-b-2 border-white/20 pb-3"><div><p className="font-mono text-xs text-white/75">TABLE ENERGY</p><p className={`font-heading text-2xl ${heat==='INFERNO'?'text-pink':heat==='HEATING UP'?'text-acid':'text-green'}`}>{heat}</p></div><Flame className="size-8 text-pink" aria-hidden="true"/></div>
         <div className="mt-4"><div className="flex items-center justify-between"><p className="font-mono text-xs font-bold text-acid">FROM THE RAIL</p><Activity className="size-4 text-pink"/></div><div className="mt-2 space-y-2">{actionFeed.length===0?<p className="border border-dashed border-white/25 p-3 text-center text-sm text-white/75">The next move is yours to watch. Bets and folds appear here live.</p>:actionFeed.map(entry=><div key={`${entry.transactionHash}-${entry.player}`} className="border-l-2 border-acid bg-white/5 p-2"><p className="font-mono text-xs text-white/75">{avatar(entry.player)} {short(entry.player)}</p><p className="text-sm font-black">{ACTION_NAMES[entry.action]||'ACTED'}{entry.amount>0n?` · ${number(entry.amount)}`:''}</p></div>)}</div></div>
       </aside>
@@ -364,11 +370,11 @@ function GameTable({id,address,close,transact,busy,notify}:{id:bigint,address?:`
       : me<0 ? !joinable?<div className="border-3 border-ink bg-white p-4 text-center"><p className="font-black">SPECTATING · HAND IN PROGRESS</p><p className="mt-1 text-sm font-semibold text-ink/75">Seats reopen after the hand is settled.</p></div>
       : tableFull?<div className="border-3 border-ink bg-white p-4 text-center"><p className="font-black">TABLE FULL</p><p className="mt-1 text-sm font-semibold text-ink/75">Watch this table or choose another from the lobby.</p></div>
       : <button onClick={()=>transact('joinTable',[id,BigInt(table[3])])} className="brutal-button w-full bg-acid py-4">TAKE A SEAT · {number(table[3])} FREE CHIPS</button>
-      : phase===0||phase===7 ? <div className="grid grid-cols-2 gap-2"><button onClick={()=>transact('leaveTable',[id])} className="brutal-button bg-white py-4">LEAVE TABLE</button>{address?.toLowerCase()===table?.[0]?.toLowerCase()&&(seats?.[1].filter(stack=>stack>0n).length||0)>=2?<button onClick={()=>transact('startHand',[id])} className="brutal-button bg-pink py-4">START HAND</button>:<div className="grid place-items-center border-3 border-ink bg-white p-2 text-center text-sm font-black">WAITING FOR HOST</div>}</div>
+      : phase===0||phase===7 ? <div className="grid grid-cols-2 gap-2"><button onClick={()=>transact('leaveTable',[id])} className="brutal-button bg-white py-4">LEAVE TABLE</button>{address?.toLowerCase()===table?.[0]?.toLowerCase()&&(seats?.[1].filter(stack=>stack>0n).length||0)>=2?<button onClick={startAndPrepare} className="brutal-button bg-pink py-4">START & PREPARE CARDS</button>:<div className="grid place-items-center border-3 border-ink bg-white p-2 text-center text-sm font-black">WAITING FOR HOST</div>}</div>
       : phase===1 ? timedOut ? <p className="border-2 border-ink bg-white p-3 text-center text-sm">Use Close hand above to record this deal as no contest.</p>
       : number(shuffleRemaining)>0 ? <div><p className="mb-3 text-base font-bold">{smallBatches?`${shuffleBatches} smaller batches left`:'Finish the encrypted deal with one wallet confirmation.'}</p><button disabled={privateBusy} onClick={advanceEncryptedShuffle} className="brutal-button w-full bg-acid py-4 disabled:opacity-50"><ShieldCheck/> {privateBusy?'DEALING…':smallBatches?'DEAL NEXT BATCH':'DEAL ALL CARDS'}</button><button onClick={()=>setSmallBatches(value=>!value)} className="mt-2 min-h-11 w-full text-sm font-bold underline">{smallBatches?'Use one-confirmation deal':'Having gas-estimation trouble? Use smaller batches'}</button></div>
       : entropySubmitted ? <div className="border-3 border-ink bg-white p-4 text-center font-black">READY · WAITING FOR OTHER PLAYERS</div>
-      : <button disabled={privateBusy} onClick={submitEncryptedEntropy} className="brutal-button w-full bg-purple py-4 text-white disabled:cursor-wait disabled:opacity-50"><LockKeyhole/> {privateBusy?'TRANSACTION IN PROGRESS':'READY MY PRIVATE CARDS'}</button>
+      : <button disabled={privateBusy} onClick={submitEncryptedEntropy} className="brutal-button w-full bg-purple py-4 text-white disabled:cursor-wait disabled:opacity-50"><LockKeyhole/> {privateBusy?'TRANSACTION IN PROGRESS':'PREPARE MY DEAL'}</button>
       : phase===9 ? <div className="border-3 border-ink bg-white p-3"><p className="text-lg font-black">See your cards. Then play.</p><p className="my-2 text-sm">No blinds or turn timer until every player confirms. Preparation window: {secondsLeft}s. If it expires, close the deal without losing chips.</p>{timedOut?<button onClick={()=>transact('abortStalledHand',[id])} className="brutal-button bg-acid p-3">CLOSE DEAL · NO CHIPS LOST</button>:<button disabled={busy||!!cardsAcknowledged||cardView.stage!=='ready'} onClick={()=>{if(cardView.stage==='ready'&&table)transact('confirmCardsReady',[id,table[6]]);}} className="brutal-button w-full bg-acid p-3 disabled:opacity-50">{cardsAcknowledged?'READY · WAITING FOR OTHER PLAYERS':cardView.stage==='ready'?'I SEE MY CARDS · READY TO PLAY':'PREPARING YOUR PRIVATE CARDS…'}</button>}</div>
       : phase===6 ? <button disabled={privateBusy} onClick={()=>publishReveal(true)} className="brutal-button w-full bg-pink py-4 disabled:cursor-wait disabled:opacity-50"><ShieldCheck/> {privateBusy?'FINDING WINNER…':'SHOW WINNER · AWARD CREDITS'}</button>
       : needsBoardReveal ? <button disabled={privateBusy} onClick={()=>publishReveal(false)} className="brutal-button w-full bg-green py-4 disabled:cursor-wait disabled:opacity-50"><ShieldCheck/> {privateBusy?'REVEALING…':revealLabel}</button>

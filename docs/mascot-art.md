@@ -6,4 +6,4 @@ Created using built-in image generation, then visually inspected and copied into
 
 Prompt: Original playful mischievous purple cartoon card-shark wearing lime sunglasses and holding face-down pink poker cards; neo-brutalist sticker illustration, chunky black outlines, hard graphic shapes, square centered portrait, transparent background, cream/lime/purple/pink palette, no text or watermark.
 
-The mascot lives outside the playing surface. Its button cycles local quips and a brief animation, with keyboard support and reduced-motion handling. It receives no cards, wallet identity, or game data. It replaces the former ACE table-host illustration; that source remains recoverable in Git history.
+The mascot appears as a low-opacity background on the playing surface, behind the cards and controls. It does not capture pointer events or receive cards, wallet identity, or game data. It replaces the former ACE table-host illustration; that source remains recoverable in Git history.
