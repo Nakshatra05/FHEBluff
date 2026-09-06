@@ -84,6 +84,21 @@ Hardhat uses the official CoFHE Arbitrum Sepolia preset. Contract tests run agai
 
 `smoke:arb-sepolia` creates a temporary two-wallet table on the deployed contract, submits independently encrypted entropy, advances the real encrypted shuffle, verifies that cross-player decryption is rejected, and settles the hand through CoFHE threshold decryption. It requires the server-only variables `PRIVATE_KEY` and `FHEBLUFF_CONTRACT_ADDRESS`; the generated guest key exists only for that process.
 
+## Beginner experience
+
+- **Play instantly** opens a local teaching game against a computer, with contextual coaching, a hand ranking cheat sheet, and a move recap. It requires no wallet or transactions. It uses simplified fixed bets, equal antes, and one raise per street; it is explicitly unranked and is not a CoFHE game. Each hand starts with equal 500-chip stacks. Results are session-only and never award Credits.
+- **Find me a seat** opens an occupied, available table, preferring smaller tables. If none is available, the same button opens table creation. New tables default to two seats, 5/10 blinds, and 500 free play chips. Joining still requires test ETH for gas.
+- Table creation opens the newly created table after confirmation. **Copy friend invite** generates a `/play?table=ID` link that opens that table.
+- Multiplayer has a contextual next-step guide. Check/call and fold are the primary controls; raise presets and all-in are under “Bet more”. Moves are simulated before a signing request, buttons lock while a request is processing, and errors use plain language. CoFHE deal and reveal transactions still require explicit wallet confirmations.
+- The lobby shows the wins needed to surpass the next higher Credit total using current leaderboard scores. Credits remain contract-awarded: +1 for every winning player of a completed hand, including tied winners. There are no practice, participation, or self-claim Credit bonuses. This is an all-time Credit ranking, not a skill/Elo rating.
+- Locally decrypted live hole cards are scoped to table, hand, and wallet before display. They are not used by the practice opponent or persisted in browser storage.
+
+Run practice engine checks with Node.js 24 or newer:
+
+```bash
+node --test test/practice-poker.test.mjs
+```
+
 ## Privacy and operational notes
 
 - Never log decrypted cards, encryption inputs, proofs, or ACP private material.

@@ -1,0 +1,11 @@
+.git
+.env*
+node_modules
+.next
+tmp
+outputs
+work
+.pnpm-store
+artifacts
+cache
+typechain-types

@@ -35,8 +35,9 @@ export default function Home() {
           </p>
           <div className="mt-9 flex flex-wrap gap-4">
             <form action="/play"><button type="submit" className="brutal-button bg-acid px-7 py-4 text-base">ENTER APP <ArrowUpRight /></button></form>
-            <a href="#privacy" className="brutal-button bg-white px-7 py-4 text-base">HOW PRIVACY WORKS</a>
+            <Link href="/play?practice=1" className="brutal-button bg-white px-7 py-4 text-base">TRY POKER · NO WALLET</Link>
           </div>
+          <p className="mt-4 text-sm font-semibold">Start with a coached practice hand. Then join friends in encrypted multiplayer to earn Credits.</p>
         </div>
         <div className="relative mt-20 min-h-[360px] lg:mt-0">
           <div className="absolute left-[5%] top-[22%] h-64 w-44 -rotate-12 border-4 border-ink bg-white p-4 shadow-hard-lg sm:left-[18%] sm:h-80 sm:w-56">
