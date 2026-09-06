@@ -145,6 +145,10 @@ node --test test/practice-poker.test.mjs
 
 ## Primary references
 
+### End-of-hand experience
+
+Settled hands display a prominent personal result, the event's total pot, verified winners, Credits, and a signature-free Back to lobby action. Fold/showdown explanations use the settlement transaction type; they never invent hand ranks or individual side-pot payouts. Historical pre-settlement seats establish participation (when available), so spectators and later joiners are not labeled losers. Missing result data remains neutral and retries. Table seats persist until explicitly left; hosts may start another hand. Practice has its own large outcome, explanation, and net-chip summary, without awarding Credits.
+
 - [CoFHE client overview](https://cofhe-docs.fhenix.zone/client-sdk/introduction/overview)
 - [CoFHE compatibility and network matrix](https://cofhe-docs.fhenix.zone/get-started/introduction/compatibility)
 - [CoFHE access-control permissions](https://cofhe-docs.fhenix.zone/fhe-library/core-concepts/access-control)

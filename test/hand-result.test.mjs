@@ -1,0 +1,18 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {createRequire} from 'node:module';
+import ts from 'typescript';
+import React from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
+const source=readFileSync(new URL('../components/poker/hand-result.tsx',import.meta.url),'utf8');
+const compiled=ts.transpileModule(source,{compilerOptions:{jsx:ts.JsxEmit.ReactJSX,module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+const module={exports:{}};
+new Function('require','module','exports',compiled)(createRequire(import.meta.url),module,module.exports);
+const result={handId:2n,winners:['0xABC'],pot:1500n,transactionHash:'0x123',method:'settleShowdown'};
+const render=(props={})=>renderToStaticMarkup(React.createElement(module.exports.HandResultPanel,{handId:2n,result,address:'0xabc',seated:true,folded:false,onLobby:()=>{},...props}));
+test('confirmed winner receives a prominent win and one Credit',()=>{const html=render();assert.match(html,/YOU WON!/);assert.match(html,/\+1 CREDIT/);assert.match(html,/BACK TO LOBBY/);assert.match(html,/View settlement receipt/);});
+test('loss and fold explanation never invent hand ranks',()=>{const html=render({address:'0xdef',folded:true});assert.match(html,/YOU LOST THIS HAND/);assert.match(html,/You folded/);assert.match(html,/0 CREDITS/);assert.doesNotMatch(html,/flush|straight/);});
+test('side pot winners are not mislabeled as a tied hand or individual payout',()=>{const html=render({result:{...result,winners:['0xABC','0xDEF']}});assert.match(html,/YOU WON A POT!/);assert.match(html,/side-pot winners/);assert.match(html,/not each winner/);});
+test('missing and stale results cannot announce a winner or show old receipts',()=>{for(const stale of [null,{...result,handId:1n}]){const html=render({result:stale});assert.match(html,/Loading its verified result/);assert.doesNotMatch(html,/YOU WON|YOU LOST|View settlement receipt/);}});
+test('spectator receives neutral result and uncontested explanation',()=>{const html=render({address:undefined,seated:false,result:{...result,method:'forceTimeoutFold'}});assert.match(html,/HAND COMPLETE/);assert.match(html,/All other players folded/);assert.doesNotMatch(html,/YOU LOST|YOUR CREDITS/);});

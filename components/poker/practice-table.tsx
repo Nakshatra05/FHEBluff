@@ -10,6 +10,8 @@ export function PracticeTable({close,playRanked}:{close:()=>void;playRanked:()=>
   const [hand,setHand]=useState(()=>newPracticeHand());
   const [results,setResults]=useState({hands:0,wins:0,ties:0});
   const [showRanks,setShowRanks]=useState(false);
+  const resultHeading=useRef<HTMLDivElement>(null);
+  useEffect(()=>{if(hand.finished)resultHeading.current?.scrollIntoView({block:'center',behavior:'instant'});},[hand.finished]);
   const action=(move:PracticeAction)=>{
     const next=practiceMove(hand,move);
     setHand(next);
@@ -29,7 +31,7 @@ export function PracticeTable({close,playRanked}:{close:()=>void;playRanked:()=>
         <p className="mt-6 font-mono text-sm text-acid">YOUR CARDS</p><div className="mt-2 flex justify-center gap-2">{hand.hole.map(card=><PracticeCard key={card} card={card}/>)}</div>
         {hand.board.length>=3&&<p className="mt-3 text-base font-bold">Your best hand: {HAND_NAMES[bestHand([...hand.hole,...hand.board])[0]]}</p>}
       </div>
-      <div className="border-3 border-ink bg-white p-4" aria-live="polite"><p className="flex items-center gap-2 font-black text-purple"><Sparkles className="size-5"/>{hand.finished?(hand.outcome==='win'?'You won!':hand.outcome==='tie'?'Split pot':'Hand over'):'Your next move'}</p><p className="mt-2 text-base leading-relaxed">{hand.explanation}</p></div>
+      <div ref={resultHeading} className={`border-3 border-ink p-5 shadow-hard ${hand.finished&&hand.outcome==='win'?'bg-acid':'bg-white'}`} aria-live="polite"><p className={hand.finished?'font-heading text-4xl sm:text-5xl':'flex items-center gap-2 font-black text-purple'}>{!hand.finished&&<Sparkles className="size-5"/>}{hand.finished?(hand.outcome==='win'?'YOU WON!':hand.outcome==='tie'?'SPLIT POT':'YOU LOST THIS HAND'):'Your next move'}</p><p className="mt-3 text-base leading-relaxed">{hand.explanation}</p>{hand.finished&&<><p className="mt-3 text-xl font-black">{hand.stack-500>=0?'+':''}{hand.stack-500} NET CHIPS · PRACTICE ONLY</p><button onClick={close} className="brutal-button mt-4 min-h-12 bg-pink px-5 py-3">BACK TO LOBBY</button></>}</div>
       {!hand.finished?<div className="fixed inset-x-0 bottom-0 z-10 mx-auto grid max-w-4xl grid-cols-3 gap-2 border-t-3 border-ink bg-cream px-3 py-3 pb-[max(.75rem,env(safe-area-inset-bottom))]">
         <p className="col-span-3 text-center text-sm font-bold">{STREETS[hand.street]} · {hand.due?`${hand.due} chips to stay in`:'Checking is free'}</p>
         <button onClick={()=>action('fold')} className="border-3 border-ink bg-pink px-2 py-3 font-black shadow-hard-sm">Fold<span className="mt-1 block text-xs font-medium">Give up this hand</span></button>
