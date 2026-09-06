@@ -16,3 +16,22 @@ test('loss and fold explanation never invent hand ranks',()=>{const html=render(
 test('side pot winners are not mislabeled as a tied hand or individual payout',()=>{const html=render({result:{...result,winners:['0xABC','0xDEF']}});assert.match(html,/YOU WON A POT!/);assert.match(html,/side-pot winners/);assert.match(html,/not each winner/);});
 test('missing and stale results cannot announce a winner or show old receipts',()=>{for(const stale of [null,{...result,handId:1n}]){const html=render({result:stale});assert.match(html,/Loading its verified result/);assert.doesNotMatch(html,/YOU WON|YOU LOST|View settlement receipt/);}});
 test('spectator receives neutral result and uncontested explanation',()=>{const html=render({address:undefined,seated:false,result:{...result,method:'forceTimeoutFold'}});assert.match(html,/HAND COMPLETE/);assert.match(html,/All other players folded/);assert.doesNotMatch(html,/YOU LOST|YOUR CREDITS/);});
+
+test('settled games render only the result, independently of activity and metadata',()=>{
+  const page=readFileSync(new URL('../app/play/page.tsx',import.meta.url),'utf8');
+  const terminal=page.slice(page.indexOf('if(phase===7)return'),page.indexOf('return <div className="fixed inset-0 z-50 overflow-y-auto bg-[#191917]'));
+  assert.match(terminal,/HandResultPanel/);
+  assert.doesNotMatch(terminal,/WAITING FOR HOST|LEAVE TABLE|PokerArena|Game controls/);
+  assert.ok(page.indexOf('setLastResult({...result,...metadata.get')<page.indexOf('const tx=await publicClient.getTransaction'));
+  assert.match(page,/visibilitychange/);
+  assert.match(page,/args:\{tableId:id,handId:resultHandId\}/);
+  assert.doesNotMatch(render(),/Table options are below/);
+});
+
+test('card handles load alongside permission and individual cards are shown as they finish',()=>{
+  const hook=readFileSync(new URL('../components/poker/use-private-cards.ts',import.meta.url),'utf8');
+  assert.ok(hook.indexOf('const handlesPromise=')<hook.indexOf('await withDeadline(client.connect'));
+  assert.match(hook,/available\[index\]=card/);
+  assert.match(hook,/cards:\[\.\.\.cards\]/);
+  assert.match(hook,/if\(current\(\)\)/);
+});

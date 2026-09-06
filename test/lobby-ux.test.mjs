@@ -20,10 +20,10 @@ test('dense UI metadata does not fall below the 12px type floor',()=>{
   assert.match(css,/\.brutal-button \{ min-height:48px; border-radius:0;/);
   assert.match(css,/\.poker-felt \{ grid-template-columns:minmax\(0,1fr\);/);
 });
-test('new players get two immediate choices and an optional guide',()=>{
+test('new players get two immediate choices and an always-visible guide',()=>{
   const html=render();assert.equal((html.match(/<button/g)||[]).length,2);
   assert.match(html,/Practice a hand/);assert.match(html,/Play with friends/);
-  assert.doesNotMatch(html,/<details[^>]*\bopen\b/);
+  assert.doesNotMatch(html,/<details|<summary/);
   assert.match(html,/practice does not/);
 });
 test('waiting players and tied competition rank are represented honestly',()=>{
