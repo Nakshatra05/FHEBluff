@@ -29,9 +29,9 @@ test('new deployment is explicit and old unversioned invitations remain legacy',
   assert.equal(resolve('?table=8&version=ready'),'ready');
   assert.equal(resolve('?version=legacy'),'ready');
 });
-test('readiness UI requires visible cards and permission cache includes deployment',()=>{
+test('readiness permits explicit early opt-in and permission cache includes deployment',()=>{
   const page=readFileSync(new URL('../app/play/page.tsx',import.meta.url),'utf8');
-  assert.match(page,/cardView.stage==='ready'&&table\)transact\('confirmCardsReady',\[id,table\[6\]\]\)/);
+  assert.match(page,/onReady=\{\(\)=>\{if\(table\)transact\('confirmCardsReady',\[id,table\[6\]\]\)/);
   assert.match(page,/const isMyTurn=phase>=2&&phase<=5/);
   assert.match(page,/url.searchParams.set\('version',readiness\?'ready':'legacy'\)/);
   const client=readFileSync(new URL('../lib/cofhe-client.ts',import.meta.url),'utf8');

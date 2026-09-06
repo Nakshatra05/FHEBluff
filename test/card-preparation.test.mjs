@@ -32,7 +32,7 @@ test('protected deals explicitly keep chips and betting clock out of preparation
 test('only failed or stopped access exposes retry; slow legacy waits disclose active clock',()=>{
   assert.match(render({stage:'error',message:'Try again'}),/RETRY CARD ACCESS/);
   assert.match(render({stage:'idle',message:'Stopped'}),/RETRY CARD ACCESS/);
-  assert.match(render({stage:'decrypting',busy:true,elapsed:25}),/betting clock is not paused/);
+  assert.match(render({stage:'decrypting',busy:true,elapsed:25}),/Card loading does not pause your turn clock/);
   assert.doesNotMatch(render({stage:'decrypting',busy:true}),/RETRY CARD ACCESS/);
   const css=readFileSync(new URL('../app/globals.css',import.meta.url),'utf8');
   assert.match(css,/\.deal-motion \.card-back\{animation:none\}/);

@@ -41,6 +41,16 @@ describe('FHEBluffReady preparation gate',function(){
     const block=await hre.ethers.provider.getBlock('latest');expect(started[10]).eq(BigInt(block.timestamp+120));
     await expect(game.confirmCardsReady(0,1)).revertedWithCustomError(game,'InvalidPhase');
   });
+  it('allows both players to opt in and act without first decrypting cards',async()=>{
+    const {game,a,b}=await setup();
+    await game.confirmCardsReady(0,1);
+    expect((await game.getTableView(0))[5]).eq(9n);
+    await game.connect(b).confirmCardsReady(0,1);
+    const view=await game.getTableView(0);
+    expect(view[5]).eq(2n);expect(view[7]).eq(15n);
+    await game.connect([a,b][Number(view[9])]).act(0,2,0);
+    expect((await game.getTableView(0))[7]).eq(20n);
+  });
   it('expires without chip penalties or Credits and rejects stale acknowledgements',async()=>{
     const {game,b,outsider,deal}=await setup();
     await game.confirmCardsReady(0,1);

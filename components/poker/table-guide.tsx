@@ -2,7 +2,7 @@ import {BookOpen,CheckCircle2} from 'lucide-react';
 
 export function TableGuide({phase,seated,host,players,full,submitted,batches,myTurn,due,boardPending,folded,allIn,busy}:{phase:number;seated:boolean;host:boolean;players:number;full:boolean;submitted:boolean;batches:number;myTurn:boolean;due:number;boardPending:boolean;folded:boolean;allIn:boolean;busy:boolean}) {
   let title='Take a seat to play';let body='Joining gives you the table’s free play chips. Your wallet confirmation pays only the testnet network fee.';
-  if(phase===9){title='Cards first · betting clock off';body='Your cards unlock automatically. Once both are visible, confirm readiness below. Betting starts only after everyone confirms; the preparation window is separate from the turn timer.';}
+  if(phase===9){title='Ready to play?';body='Choose Play while cards load to opt in now, or wait to see your cards first. Once everyone opts in, blinds and the turn clock start. Card loading continues in the background.';}
   else if(phase===8){title='This table has closed';body='Go back to the lobby to find a fresh table.';}
   else if(!seated&&full&&(phase===0||phase===7)){title='Table full · watching';body='These seats are occupied. You can watch, or return to the lobby to find an open seat.';}
   else if(!seated&&phase>0&&phase<7){title='You’re watching a hand';body='You can join once this hand finishes. Shared cards and public moves are visible while you watch.';}
