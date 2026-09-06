@@ -11,9 +11,7 @@ const require=createRequire(import.meta.url);
 const source=readFileSync(new URL('../components/poker/poker-arena.tsx',import.meta.url),'utf8');
 const compiled=ts.transpileModule(source,{compilerOptions:{jsx:ts.JsxEmit.ReactJSX,module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
 const module={exports:{}};
-const hostCode=ts.transpileModule(readFileSync(new URL('../components/poker/dealer-host.tsx',import.meta.url),'utf8'),{compilerOptions:{jsx:ts.JsxEmit.ReactJSX,module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
-const host={exports:{}};new Function('require','module','exports',hostCode)(require,host,host.exports);
-new Function('require','module','exports',compiled)(name=>name==='./dealer-host'?host.exports:require(name),module,module.exports);
+new Function('require','module','exports',compiled)(require,module,module.exports);
 const {PokerArena,PlayingCard}=module.exports;
 const render=(component,props)=>renderToStaticMarkup(React.createElement(component,props));
 

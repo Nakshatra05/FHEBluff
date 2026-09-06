@@ -138,6 +138,23 @@ button,a { -webkit-tap-highlight-color:transparent; }
 .arena-seat { border-width:3px; }
 .poker-layout, .poker-scene, .poker-felt, .arena-seats { min-width:0; }
 .poker-felt { grid-template-columns:minmax(0,1fr); }
+.poker-mascot { margin-bottom:16px; }
+.mascot-button { display:block; width:100%; border:3px solid #151513; background:#d8ff3e; box-shadow:4px 4px 0 #ff47a4; cursor:pointer; transition:transform .15s; }
+.mascot-button:hover { transform:rotate(-2deg); }
+.mascot-button:focus-visible { outline:3px solid white; outline-offset:5px; }
+.mascot-button img { width:100%; height:auto; aspect-ratio:1; object-fit:contain; }
+.mascot-tap { display:block; background:#151513; color:#d8ff3e; padding:8px 4px; font-size:12px; font-weight:900; }
+.mascot-quip { margin-top:12px; border:2px solid #151513; background:#fff9df; color:#151513; padding:10px; font-size:14px; font-weight:700; line-height:1.4; }
+.mascot-react { animation:mascot-hop .45s ease-out; }
+@keyframes mascot-hop { 30% { transform:translateY(-8px) rotate(-6deg); } 65% { transform:rotate(5deg); } }
+@media(max-width:1023px) {
+  .poker-scene > aside { display:block; max-height:none; overflow:visible; padding:8px; }
+  .poker-scene > aside > :not(.poker-mascot) { display:none; }
+  .poker-mascot { display:grid; grid-template-columns:64px minmax(0,1fr); align-items:center; gap:12px; margin:0; }
+  .mascot-tap { display:none; }
+  .mascot-quip { margin:0; }
+}
+@media(prefers-reduced-motion:reduce) { .mascot-react { animation:none; } .mascot-button { transition:none; } .mascot-button:hover { transform:none; } }
 .arena-seats > * { min-width:0; }
 .arena-stage { max-width:100%; min-width:0; text-align:center; }
 .seat-foot { border-top:2px solid #11100f; line-height:1.5; }

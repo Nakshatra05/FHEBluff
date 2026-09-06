@@ -15,6 +15,7 @@ import { TableGuide } from '@/components/poker/table-guide';
 import { BettingControls } from '@/components/poker/betting-controls';
 import { TransactionNotice } from '@/components/poker/transaction-notice';
 import { PokerArena, PlayingCard } from '@/components/poker/poker-arena';
+import { PokerMascot } from '@/components/poker/poker-mascot';
 import { HandHistory } from '@/components/poker/hand-history';
 import { usePrivateCards } from '@/components/poker/use-private-cards';
 import { useCreditsBoard } from '@/components/poker/use-credits-board';
@@ -341,6 +342,7 @@ function GameTable({id,address,close,transact,busy,notify}:{id:bigint,address?:`
     <div className="poker-scene">
       <PokerArena capacity={number(table?.[1])} phase={stage} status={tableStatus} pot={number(table?.[7])} address={address} board={community||[]} seats={(seats?.[0]||[]).map((player,i)=>({player,stack:number(seats?.[1][i]),bet:number(seats?.[2][i]),state:seats?.[3][i]||0,active:phase>=2&&phase<=5&&!needsBoardReveal&&number(table?.[9])===i,credits:seatCredits[i]||0}))}/>
       <aside className="border-3 border-white/25 bg-ink p-3 shadow-[5px_5px_0_#6c45ff]">
+        <PokerMascot/>
         <div className="flex items-center justify-between border-b-2 border-white/20 pb-3"><div><p className="font-mono text-xs text-white/75">TABLE ENERGY</p><p className={`font-heading text-2xl ${heat==='INFERNO'?'text-pink':heat==='HEATING UP'?'text-acid':'text-green'}`}>{heat}</p></div><Flame className="size-8 text-pink" aria-hidden="true"/></div>
         <div className="mt-4"><div className="flex items-center justify-between"><p className="font-mono text-xs font-bold text-acid">FROM THE RAIL</p><Activity className="size-4 text-pink"/></div><div className="mt-2 space-y-2">{actionFeed.length===0?<p className="border border-dashed border-white/25 p-3 text-center text-sm text-white/75">The next move is yours to watch. Bets and folds appear here live.</p>:actionFeed.map(entry=><div key={`${entry.transactionHash}-${entry.player}`} className="border-l-2 border-acid bg-white/5 p-2"><p className="font-mono text-xs text-white/75">{avatar(entry.player)} {short(entry.player)}</p><p className="text-sm font-black">{ACTION_NAMES[entry.action]||'ACTED'}{entry.amount>0n?` · ${number(entry.amount)}`:''}</p></div>)}</div></div>
       </aside>
