@@ -27,7 +27,7 @@ test('new deployment is explicit and old unversioned invitations remain legacy',
   assert.equal(resolve(''),'ready');
   assert.equal(resolve('?table=8'),'legacy');
   assert.equal(resolve('?table=8&version=ready'),'ready');
-  assert.equal(resolve('?version=legacy'),'legacy');
+  assert.equal(resolve('?version=legacy'),'ready');
 });
 test('readiness UI requires visible cards and permission cache includes deployment',()=>{
   const page=readFileSync(new URL('../app/play/page.tsx',import.meta.url),'utf8');

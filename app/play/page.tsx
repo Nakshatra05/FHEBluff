@@ -28,12 +28,12 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { fheBluffAbi, PHASES } from '@/lib/fhebluff-abi';
 import { ARBITRUM_SEPOLIA_CHAIN_ID } from '@/lib/network';
-import { createCardViewClient } from '@/lib/cofhe-client';
+import { createCardViewClient, authorizeCardView } from '@/lib/cofhe-client';
 import {deployments,resolveDeployment,PokerDeploymentContext,usePokerDeployment,type DeploymentVersion} from '@/lib/poker-deployment';
 
 type TableView = readonly [`0x${string}`, number, bigint, bigint, number, number, bigint, bigint, bigint, number, bigint];
 type AppView = 'tables'|'active'|'history'|'credits'|'leaderboard'|'privacy';
-type HandResult = { tableId:bigint; handId:bigint; winners:readonly `0x${string}`[]; pot:bigint; transactionHash:`0x${string}`; voided?:boolean;blockNumber?:bigint;method?:string;participants?:readonly string[] };
+type HandResult = { tableId:bigint; handId:bigint; winners:readonly `0x${string}`[]; pot:bigint; transactionHash:`0x${string}`; voided?:boolean;blockNumber?:bigint;method?:string;participants?:readonly string[];version?:DeploymentVersion };
 type ActionEntry = { player:`0x${string}`; action:number; amount:bigint; transactionHash:`0x${string}` };
 const short = (v?: string) => v ? `${v.slice(0,6)}…${v.slice(-4)}` : '—';
 const number = (v: bigint | number | undefined) => Number(v || 0);
@@ -58,7 +58,7 @@ export default function PokerPage(){
 }
 
 function PokerApp() {
-  const {address:POKER_ADDRESS,block:POKER_DEPLOYMENT_BLOCK,readiness}=usePokerDeployment();
+  const {address:POKER_ADDRESS,readiness}=usePokerDeployment();
   const { ready, authenticated, login, logout } = usePrivy();
   const { address, chainId } = useAccount();
   const publicClient = usePublicClient();
@@ -90,16 +90,19 @@ function PokerApp() {
     let cancelled=false;
     let fetching=false;
     const load=async()=>{if(fetching)return;fetching=true;try{
-      const [settled,voided]=await Promise.all([
-        publicClient.getContractEvents({address:POKER_ADDRESS,abi:fheBluffAbi,eventName:'HandSettled',fromBlock:POKER_DEPLOYMENT_BLOCK,toBlock:'latest'}),
-        publicClient.getContractEvents({address:POKER_ADDRESS,abi:fheBluffAbi,eventName:'HandAborted',fromBlock:POKER_DEPLOYMENT_BLOCK,toBlock:'latest'}),
-      ]);
+      const histories=await Promise.all((Object.entries(deployments) as [DeploymentVersion,typeof deployments.ready][]).map(async([version,deployment])=>{
+        const [settled,voided]=await Promise.all([
+          publicClient.getContractEvents({address:deployment.address,abi:fheBluffAbi,eventName:'HandSettled',fromBlock:deployment.block,toBlock:'latest'}),
+          publicClient.getContractEvents({address:deployment.address,abi:fheBluffAbi,eventName:'HandAborted',fromBlock:deployment.block,toBlock:'latest'}),
+        ]);
+        return [...settled.map(log=>({version,tableId:log.args.tableId!,handId:log.args.handId!,winners:log.args.winners!,pot:log.args.pot!,transactionHash:log.transactionHash,blockNumber:log.blockNumber})),...voided.map(log=>({version,tableId:log.args.tableId!,handId:log.args.handId!,winners:[] as `0x${string}`[],pot:0n,transactionHash:log.transactionHash,voided:true,blockNumber:log.blockNumber}))];
+      }));
       if(cancelled)return;setHistoryError('');
-      setHandHistory([...settled.map(log=>({tableId:log.args.tableId!,handId:log.args.handId!,winners:log.args.winners!,pot:log.args.pot!,transactionHash:log.transactionHash,blockNumber:log.blockNumber})),...voided.map(log=>({tableId:log.args.tableId!,handId:log.args.handId!,winners:[] as `0x${string}`[],pot:0n,transactionHash:log.transactionHash,voided:true,blockNumber:log.blockNumber}))].sort((a,b)=>a.blockNumber>b.blockNumber?-1:1));
+      setHandHistory(histories.flat().sort((a,b)=>a.blockNumber>b.blockNumber?-1:a.blockNumber<b.blockNumber?1:0));
     }catch{if(!cancelled)setHistoryError('History unavailable');}finally{fetching=false;if(!cancelled)setHistoryLoading(false);}};
     void load();const timer=setInterval(()=>void load(),15000);
     return()=>{cancelled=true;clearInterval(timer);};
-  },[contractReady,publicClient,POKER_ADDRESS,POKER_DEPLOYMENT_BLOCK]);
+  },[contractReady,publicClient]);
   useEffect(()=>{
     const context = typeof document === 'undefined' ? undefined : (document as Document & {modelContext?: {registerTool:(tool:unknown, opts?:unknown)=>void}}).modelContext;
     if(!context?.registerTool) return;
@@ -171,7 +174,6 @@ function PokerApp() {
       {notice&&!practiceOpen&&!createOpen&&<TransactionNotice notice={notice} onDismiss={dismissNotice}/>}
 
       <div className="mx-auto max-w-6xl p-3 sm:p-6">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-3 border-ink bg-acid p-3 font-bold"><span>{readiness?'CARDS FIRST. CLOCK SECOND.':'LEGACY TABLES · betting timers are not protected'}</span><a className="underline" href={readiness?'/play?version=legacy':'/play'}>{readiness?'Old tables & Credits':'Play protected tables →'}</a></div>
         <section className="min-w-0">
           <div className="mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
             <div><p className="eyebrow text-purple">{titles[appView][0]}</p><h1 className="font-heading text-3xl uppercase leading-none sm:text-4xl">{titles[appView][1]}</h1></div>
@@ -186,14 +188,14 @@ function PokerApp() {
               {!contractReady ? <Empty icon={X} title="CONTRACT NOT CONFIGURED" body="Set NEXT_PUBLIC_FHEBLUFF_CONTRACT_ADDRESS to the deployed Arbitrum Sepolia contract. No demo tables are substituted for chain state." /> : tablesLoading&&tableCount!==0n ? <output className="block border-2 border-ink bg-white p-6 font-bold">Finding live tables…</output> : openRows.length===0 ? <Empty icon={Spade} title="NO TABLES TAKING SEATS" body="Start a friends table above, or practice while you wait. Finished hands are in History." /> : <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">{openRows.map(({id,data})=><TableCard key={id.toString()} id={id} data={data!} onOpen={()=>setSelected(id)} />)}</div>}
             </TabsContent>
             <TabsContent value="active" className="mt-5">{activeRows.length===0?<Empty icon={Activity} title="NO ACTIVE HANDS" body="Hands in progress will appear here with their current street and pot."/>:<div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">{activeRows.map(({id,data})=><TableCard key={id.toString()} id={id} data={data!} onOpen={()=>setSelected(id)}/>)}</div>}</TabsContent>
-            <TabsContent value="history" className="mt-5"><HandHistory hands={handHistory} loading={historyLoading} error={historyError} onOpen={setSelected}/></TabsContent>
+            <TabsContent value="history" className="mt-5"><HandHistory hands={handHistory} loading={historyLoading} error={historyError} onOpen={(id,version)=>window.location.assign(`/play?table=${id}&version=${version||'ready'}`)}/></TabsContent>
             <TabsContent value="credits" className="mt-5"><Profile address={address} credits={number(creditData)} authenticated={authenticated} login={login}/></TabsContent>
-            <TabsContent value="leaderboard" className="mt-5"><p className="mb-3 border-2 border-ink bg-cream p-3 text-sm">Credits combine wins from both contract versions. Your connected wallet appears here even at zero; login-only profiles are not yet shared globally.</p><Leaderboard address={address} data={leaderData as readonly [readonly `0x${string}`[],readonly bigint[]]|undefined} /></TabsContent>
+            <TabsContent value="leaderboard" className="mt-5"><p className="mb-3 border-2 border-ink bg-cream p-3 text-sm">Your Credits include all completed games. Your connected wallet appears here even at zero; login-only profiles are not yet shared globally.</p><Leaderboard address={address} data={leaderData as readonly [readonly `0x${string}`[],readonly bigint[]]|undefined} /></TabsContent>
             <TabsContent value="privacy" className="mt-5"><PrivacyPanel /></TabsContent>
           </Tabs>
         </section>
       </div>
-      {selected!==null && <GameTable key={selected.toString()} id={selected} address={address} close={()=>{setSelected(null);window.history.replaceState(null,'',readiness?'/play':'/play?version=legacy');}} transact={transact} busy={submissionLocked} notify={setNotice} />}
+      {selected!==null && <GameTable key={selected.toString()} id={selected} address={address} close={()=>{if(!readiness){window.location.assign('/play');return;}setSelected(null);window.history.replaceState(null,'','/play');}} transact={transact} busy={submissionLocked} notify={setNotice} />}
       {practiceOpen&&<PracticeTable close={()=>setPracticeOpen(false)} playRanked={()=>{setPracticeOpen(false);quickSeat();}}/>}
       <nav aria-label="Main navigation" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t-3 border-ink bg-cream sm:hidden">{([['tables',Users,'Lobby'],['active',Activity,'Hands'],['history',History,'History'],['credits',Coins,'Credits'],['leaderboard',Trophy,'Ranks'],['privacy',ShieldCheck,'Privacy']] as const).map(([value,Icon,label])=><button aria-current={appView===value?'page':undefined} onClick={()=>setAppView(value)} key={value} className={`grid min-h-16 place-items-center text-xs font-black ${appView===value?'bg-acid':''}`}><Icon className="size-5" />{label}</button>)}</nav>
     </main>
@@ -333,7 +335,7 @@ function GameTable({id,address,close,transact,busy,notify}:{id:bigint,address?:`
     else await freshPrivateWrite({address:DEAL_ROUTER,abi:multicall3Abi,functionName:'aggregate3',args:[buildDealCalls(POKER_ADDRESS,id,remaining)]} as never);
     setPrivacyStatus(smallBatches?'Deal batch confirmed.':'Private deal confirmed. View your cards below.');
   });
-  const submitEncryptedEntropy=()=>void runPrivateTask(async()=>{setPrivacyStatus('Generating private entropy and ZK proof…');await connectCofhe();const words=new BigUint64Array(2);crypto.getRandomValues(words);const entropy=(words[0]<<64n)|words[1];const [handle,proof]=await cofheClient.encryptInputs([Encryptable.uint128(entropy)]).setConsumingContract(POKER_ADDRESS).execute();await freshPrivateWrite({address:POKER_ADDRESS,abi:fheBluffAbi,functionName:'submitEntropy',args:[id,handle,proof]});setPrivacyStatus('Private entropy confirmed.');});
+  const submitEncryptedEntropy=()=>void runPrivateTask(async()=>{setPrivacyStatus('Generating private entropy and ZK proof…');await connectCofhe();const words=new BigUint64Array(2);crypto.getRandomValues(words);const entropy=(words[0]<<64n)|words[1];const [handle,proof]=await cofheClient.encryptInputs([Encryptable.uint128(entropy)]).setConsumingContract(POKER_ADDRESS).execute();await freshPrivateWrite({address:POKER_ADDRESS,abi:fheBluffAbi,functionName:'submitEntropy',args:[id,handle,proof]});setPrivacyStatus('Deal contribution confirmed. Preparing your gas-free card permission now…');notify({kind:'pending',title:'Prepare card access',message:'Approve the gas-free card permission if asked. This prepares access while the encrypted deal runs.'});await authorizeCardView(cofheClient,address!,POKER_ADDRESS);setPrivacyStatus('Card permission ready. Your cards will load automatically after the deal.');notify({kind:'success',title:'Card access prepared',message:'No further card-view signature is needed while this permission remains valid.'});});
   const publishReveal=(showdown=false)=>void runPrivateTask(async()=>{setPrivacyStatus('Requesting threshold-signed reveal…');await connectCofhe();const functionName=showdown?'getShowdownHandles':'getCommunityHandles';const handles=await publicClient!.readContract({address:POKER_ADDRESS,abi:fheBluffAbi,functionName,args:[id]}) as readonly `0x${string}`[];const revealed=await Promise.all(handles.map(h=>cofheClient.decryptForTx(h).withoutACP().execute()));await freshPrivateWrite({address:POKER_ADDRESS,abi:fheBluffAbi,functionName:showdown?'settleShowdown':'publishCommunity',args:[id,revealed.map(x=>Number(x.decryptedValue)),revealed.map(x=>x.signature)]} as never);setPrivacyStatus(showdown?'Hand settled.':'Board revealed.');});
   if(phase===7)return <div className="fixed inset-0 z-50 overflow-y-auto bg-purple p-4 sm:p-8"><div className="mx-auto max-w-4xl py-6 sm:py-12"><HandResultPanel key={`${id}:${table?.[6]}`} handId={table?.[6]??0n} result={lastResult?.tableId===id?lastResult:null} address={address} seated={!!address&&!!lastResult?.participants?.some(player=>player.toLowerCase()===address.toLowerCase())} folded={seats?.[3][me]===1} onLobby={close}/></div></div>;
   return <div className="fixed inset-0 z-50 overflow-y-auto bg-[#191917] text-white"><header className="sticky top-0 z-20 flex items-center justify-between border-b-3 border-white/25 bg-ink px-3 py-3 sm:px-6"><button onClick={close} className="flex items-center gap-2 font-black"><ArrowLeft/> LOBBY</button><div className="text-center"><p className="font-mono text-xs text-acid">TABLE #{id.toString()}</p><p className="font-black">{stage}</p></div><div className="border-2 border-acid px-3 py-2 font-mono text-sm">POT {number(table?.[7])}</div></header><div className="poker-layout mx-auto grid max-w-7xl">

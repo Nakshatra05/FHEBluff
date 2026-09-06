@@ -11,7 +11,7 @@ export type DeploymentVersion=keyof typeof deployments;
 export function resolveDeployment(search:string):DeploymentVersion{
   const query=new URLSearchParams(search);
   // Unversioned invitations were issued by the original contract.
-  return query.get('version')==='legacy'||(query.has('table')&&query.get('version')!=='ready')?'legacy':'ready';
+  return query.has('table')&&query.get('version')!=='ready'?'legacy':'ready';
 }
 export const PokerDeploymentContext=createContext(deployments.ready);
 export const usePokerDeployment=()=>useContext(PokerDeploymentContext);
