@@ -1,14 +1,16 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePrivy } from '@privy-io/react-auth';
-import { useAccount, usePublicClient, useReadContract, useReadContracts, useSwitchChain, useWaitForTransactionReceipt, useWalletClient, useWriteContract } from 'wagmi';
+import { useAccount, usePublicClient, useReadContract, useReadContracts, useSwitchChain, useWalletClient, useWriteContract } from 'wagmi';
 import { Encryptable, FheTypes } from '@cofhe/sdk';
 import { decodeEventLog } from 'viem';
 import { PracticeTable } from '@/components/poker/practice-table';
 import { PlayLaunchpad } from '@/components/poker/play-launchpad';
 import { TableGuide } from '@/components/poker/table-guide';
 import { BettingControls } from '@/components/poker/betting-controls';
+import { TransactionNotice } from '@/components/poker/transaction-notice';
+import { transactionError, type TransactionFeedback } from '@/lib/transaction-feedback';
 import { bestHand, HAND_NAMES } from '@/lib/practice-poker';
 import { Activity, ArrowLeft, Coins, Crown, Eye, EyeOff, Flame, History, LockKeyhole, Plus, Radio, ShieldCheck, Sparkles, Spade, Swords, Target, Timer, Trophy, Users, Volume2, VolumeX, WalletCards, X, Zap } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -23,14 +25,6 @@ type HandResult = { tableId:bigint; handId:bigint; winners:readonly `0x${string}
 type ActionEntry = { player:`0x${string}`; action:number; amount:bigint; transactionHash:`0x${string}` };
 const short = (v?: string) => v ? `${v.slice(0,6)}…${v.slice(-4)}` : '—';
 const number = (v: bigint | number | undefined) => Number(v || 0);
-function friendlyError(error:unknown):string {
-  const message=error instanceof Error?error.message:'';
-  if(/reject|denied|cancel/i.test(message))return 'Request cancelled. Nothing else will be sent. Try again when you’re ready.';
-  if(/insufficient funds/i.test(message))return 'Your wallet needs Arbitrum Sepolia test ETH for the network fee. The play chips themselves are free.';
-  if(/fee.*low|base fee|max fee/i.test(message))return 'The network fee changed. Try again for a fresh fee estimate.';
-  if(/revert|Invalid|NotYourTurn/i.test(message))return 'The table changed or this move is unavailable. Check the updated table and try again.';
-  return 'Could not complete this step. Check your wallet and network connection, then try again.';
-}
 const avatars = ['♠','♥','♦','♣','⚡','★','☠','◆'];
 const avatar = (address?:string) => avatars[parseInt(address?.slice(2,4)||'0',16)%avatars.length];
 const tier = (credits:number) => credits>=15?{name:'FHE LEGEND',next:15,color:'bg-pink'}:credits>=7?{name:'CIPHER ACE',next:15,color:'bg-purple text-white'}:credits>=3?{name:'CARD SHARK',next:7,color:'bg-green'}:credits>=1?{name:'BLUFFER',next:3,color:'bg-acid'}:{name:'ROOKIE',next:1,color:'bg-white'};
@@ -63,16 +57,14 @@ export default function PokerApp() {
   const { data: tables, isPending:tablesLoading, refetch: refreshTables } = useReadContracts({ contracts: ids.map(id=>({ address:POKER_ADDRESS, abi:fheBluffAbi, functionName:'getTableView' as const, args:[id] })),query:{refetchInterval:5000} });
   const { data: creditData } = useReadContract({ address:POKER_ADDRESS, abi:fheBluffAbi, functionName:'credits', args: address ? [address] : undefined, query:{ enabled:contractReady && !!address,refetchInterval:5000 } });
   const { data:leaderData } = useReadContract({address:POKER_ADDRESS,abi:fheBluffAbi,functionName:'leaderboard',args:[100n],query:{enabled:contractReady,refetchInterval:15000}});
-  const { writeContractAsync, data:txHash, isPending, error } = useWriteContract();
+  const { writeContractAsync } = useWriteContract();
   const submissionLock = useRef(false);
   const [submissionLocked,setSubmissionLocked] = useState(false);
-  const [submissionError,setSubmissionError] = useState('');
+  const [notice,setNotice] = useState<TransactionFeedback|null>(null);
+  const dismissNotice=useCallback(()=>setNotice(null),[]);
   const [handHistory,setHandHistory] = useState<HandResult[]>([]);
   const [historyLoading,setHistoryLoading] = useState(true);
   const [historyError,setHistoryError] = useState('');
-  const { isLoading:isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash:txHash });
-
-  useEffect(()=>{ if(isSuccess){ void refreshCount(); void refreshTables(); } },[isSuccess, refreshCount, refreshTables]);
   useEffect(()=>{
     if(!contractReady||!publicClient) return;
     let cancelled=false;
@@ -97,13 +89,17 @@ export default function PokerApp() {
     if(wrongNetwork) { switchChain({chainId:ARBITRUM_SEPOLIA_CHAIN_ID}); return; }
     if(submissionLock.current) return;
     submissionLock.current=true;setSubmissionLocked(true);
+    let submittedHash:`0x${string}`|undefined;
     try {
-      setSubmissionError('');
+      setNotice({kind:'pending',title:'Checking your move',message:'Making sure this action is available before opening your wallet.'});
       if(!publicClient||!address)throw new Error('Wallet unavailable');
       await publicClient.simulateContract({address:POKER_ADDRESS,abi:fheBluffAbi,functionName,args,account:address} as never);
       const fees=await publicClient.estimateFeesPerGas({type:'eip1559'});
       const buffered=fees?{maxFeePerGas:fees.maxFeePerGas*2n,maxPriorityFeePerGas:fees.maxPriorityFeePerGas}:{};
+      setNotice({kind:'pending',title:'Your wallet is ready',message:'Open your wallet to approve or cancel this request.'});
       const hash=await writeContractAsync({address:POKER_ADDRESS,abi:fheBluffAbi,functionName,args,...buffered} as never);
+      submittedHash=hash;
+      setNotice({kind:'pending',title:'Move sent',message:'Waiting for confirmation on Arbitrum Sepolia.',hash});
       const receipt=await publicClient.waitForTransactionReceipt({hash});
       if(receipt.status!=='success')throw new Error('Transaction reverted');
       if(functionName==='createTable'){
@@ -112,12 +108,13 @@ export default function PokerApp() {
           try{const event=decodeEventLog({abi:fheBluffAbi,eventName:'TableCreated',data:log.data,topics:log.topics});setCreateOpen(false);setSelected(event.args.tableId);break;}catch{}
         }
       }
-      await Promise.all([refreshCount(),refreshTables()]);
-    } catch(e) { setSubmissionError(friendlyError(e)); }
+      setNotice({kind:'success',title:'Move confirmed',message:'Your action is confirmed onchain.',hash});
+      await Promise.allSettled([refreshCount(),refreshTables()]);
+    } catch(e) { setNotice(transactionError(e,submittedHash)); }
     finally { submissionLock.current=false;setSubmissionLocked(false); }
   };
   const createTable = () => {
-    if(!Number.isSafeInteger(smallBlind)||smallBlind<1||!Number.isSafeInteger(minBuyIn)||minBuyIn<smallBlind*20){setSubmissionError('Choose whole chip amounts. The buy-in must be at least 20 × the small blind.');return;}
+    if(!Number.isSafeInteger(smallBlind)||smallBlind<1||!Number.isSafeInteger(minBuyIn)||minBuyIn<smallBlind*20){setNotice({kind:'error',title:'Check your chip amounts',message:'Use whole chips, a small blind of at least 1, and a buy-in of at least 20 × the small blind.'});return;}
     void transact('createTable',[maxPlayers,BigInt(smallBlind),BigInt(minBuyIn)]);
   };
   const rows = (tables || []).map((entry,i)=>({ id:ids[i], data:entry.status==='success' ? entry.result as TableView : null })).filter(x=>x.data);
@@ -147,7 +144,7 @@ export default function PokerApp() {
       </header>
 
       {wrongNetwork && <button onClick={()=>switchChain({chainId:ARBITRUM_SEPOLIA_CHAIN_ID})} className="flex w-full items-center justify-center gap-2 border-b-3 border-ink bg-pink px-4 py-3 font-black">WRONG NETWORK — SWITCH TO ARBITRUM SEPOLIA <Radio className="size-4" /></button>}
-      {(isPending || isConfirming || isSuccess || error || submissionError) && <div className={`fixed bottom-4 right-4 z-[80] max-w-sm border-3 border-ink p-4 font-bold shadow-hard ${error||submissionError?'bg-pink':isSuccess?'bg-green':'bg-acid'}`}>{submissionError?submissionError:error ? friendlyError(error) : isSuccess ? 'Transaction confirmed onchain.' : isConfirming ? 'Confirming on Arbitrum Sepolia…' : 'Check your wallet to continue.'}</div>}
+      {notice&&!practiceOpen&&!createOpen&&<TransactionNotice notice={notice} onDismiss={dismissNotice}/>}
 
       <div className="mx-auto grid max-w-[1500px] gap-5 p-3 sm:p-6 xl:grid-cols-[230px_1fr]">
         <aside className="hidden self-start border-3 border-ink bg-ink p-4 text-white shadow-hard xl:block">
@@ -159,7 +156,7 @@ export default function PokerApp() {
         <section className="min-w-0">
           <div className="mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
             <div><p className="eyebrow text-purple">{titles[appView][0]}</p><h1 className="font-heading text-4xl uppercase leading-none sm:text-6xl">{titles[appView][1]}</h1></div>
-            <Dialog open={createOpen} onOpenChange={setCreateOpen}><DialogTrigger render={<button className="brutal-button bg-acid px-5 py-3"><Plus /> CREATE TABLE</button>} /><DialogContent className="border-3 border-ink bg-cream shadow-hard-lg sm:max-w-md"><DialogHeader><DialogTitle className="font-heading text-3xl uppercase">Create a table</DialogTitle><DialogDescription className="font-semibold text-ink/70">Pick a pace, invite rivals, and fight for onchain Credits.</DialogDescription></DialogHeader><div className="space-y-5 pt-3"><div><p className="mb-2 font-mono text-xs font-bold">QUICK PRESETS</p><div className="grid grid-cols-3 gap-2">{([{label:'DUEL',players:2,blind:5,buyIn:500},{label:'TURBO',players:4,blind:10,buyIn:1000},{label:'CHAOS',players:6,blind:25,buyIn:2500}] as const).map(preset=><button key={preset.label} onClick={()=>{setMaxPlayers(preset.players);setSmallBlind(preset.blind);setMinBuyIn(preset.buyIn);}} className="border-2 border-ink bg-white p-2 text-xs font-black hover:bg-acid"><Zap className="mx-auto mb-1 size-4"/>{preset.label}</button>)}</div></div><Field label="Seats"><select value={maxPlayers} onChange={e=>setMaxPlayers(Number(e.target.value))} className="input-brutal"><option value="2">Heads-up · 2</option><option value="4">Four-max · 4</option><option value="6">Six-max · 6</option></select></Field><Field label="Small blind"><input className="input-brutal" type="number" min="1" value={smallBlind} onChange={e=>setSmallBlind(Number(e.target.value))}/></Field><Field label="Minimum buy-in"><input className="input-brutal" type="number" min="20" value={minBuyIn} onChange={e=>setMinBuyIn(Number(e.target.value))}/></Field><button disabled={!contractReady||submissionLocked} onClick={createTable} className="brutal-button w-full bg-purple px-5 py-4 text-white disabled:cursor-not-allowed disabled:opacity-40">{submissionLocked?'TRANSACTION IN PROGRESS':!authenticated?'CONNECT TO CREATE':wrongNetwork?'SWITCH NETWORK':'CREATE ONCHAIN'}</button></div></DialogContent></Dialog>
+            <Dialog open={createOpen} onOpenChange={setCreateOpen}><DialogTrigger render={<button className="brutal-button bg-acid px-5 py-3"><Plus /> CREATE TABLE</button>} /><DialogContent className="border-3 border-ink bg-cream shadow-hard-lg max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md"><DialogHeader><DialogTitle className="font-heading text-3xl uppercase">Create a table</DialogTitle><DialogDescription className="font-semibold text-ink/70">Pick a pace, invite rivals, and fight for onchain Credits.</DialogDescription></DialogHeader><div className="space-y-5 pt-3">{notice&&<TransactionNotice notice={notice} onDismiss={dismissNotice} inline/>}<div><p className="mb-2 font-mono text-xs font-bold">QUICK PRESETS</p><div className="grid grid-cols-3 gap-2">{([{label:'DUEL',players:2,blind:5,buyIn:500},{label:'TURBO',players:4,blind:10,buyIn:1000},{label:'CHAOS',players:6,blind:25,buyIn:2500}] as const).map(preset=><button key={preset.label} onClick={()=>{setMaxPlayers(preset.players);setSmallBlind(preset.blind);setMinBuyIn(preset.buyIn);}} className="border-2 border-ink bg-white p-2 text-xs font-black hover:bg-acid"><Zap className="mx-auto mb-1 size-4"/>{preset.label}</button>)}</div></div><Field label="Seats"><select value={maxPlayers} onChange={e=>setMaxPlayers(Number(e.target.value))} className="input-brutal"><option value="2">Heads-up · 2</option><option value="4">Four-max · 4</option><option value="6">Six-max · 6</option></select></Field><Field label="Small blind"><input className="input-brutal" type="number" min="1" value={smallBlind} onChange={e=>setSmallBlind(Number(e.target.value))}/></Field><Field label="Minimum buy-in"><input className="input-brutal" type="number" min="20" value={minBuyIn} onChange={e=>setMinBuyIn(Number(e.target.value))}/></Field><button disabled={!contractReady||submissionLocked} onClick={createTable} className="brutal-button w-full bg-purple px-5 py-4 text-white disabled:cursor-not-allowed disabled:opacity-40">{submissionLocked?'TRANSACTION IN PROGRESS':!authenticated?'CONNECT TO CREATE':wrongNetwork?'SWITCH NETWORK':'CREATE ONCHAIN'}</button></div></DialogContent></Dialog>
           </div>
 
           <Tabs value={appView} onValueChange={value=>setAppView(value as AppView)}>
@@ -182,7 +179,7 @@ export default function PokerApp() {
           </Tabs>
         </section>
       </div>
-      {selected!==null && <GameTable key={selected.toString()} id={selected} address={address} close={()=>{setSelected(null);window.history.replaceState(null,'','/play');}} transact={transact} busy={submissionLocked} />}
+      {selected!==null && <GameTable key={selected.toString()} id={selected} address={address} close={()=>{setSelected(null);window.history.replaceState(null,'','/play');}} transact={transact} busy={submissionLocked} notify={setNotice} />}
       {practiceOpen&&<PracticeTable close={()=>setPracticeOpen(false)} playRanked={()=>{setPracticeOpen(false);quickSeat();}}/>}
       <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t-3 border-ink bg-cream xl:hidden">{([['tables',Users,'Lobby'],['active',Activity,'Hands'],['history',History,'History'],['credits',Coins,'Credits'],['leaderboard',Trophy,'Ranks']] as const).map(([value,Icon,label])=><button onClick={()=>setAppView(value)} key={value} className={`grid min-h-16 place-items-center text-[10px] font-black ${appView===value?'bg-acid':''}`}><Icon className="size-5" />{label}</button>)}</nav>
     </main>
@@ -213,7 +210,7 @@ function Profile({address,credits,authenticated,login}:{address?:string,credits:
 function StatCard({label,value}:{label:string,value:string|number}){return <div className="border-3 border-ink bg-cream p-4"><span className="font-mono text-xs font-bold opacity-55">{label}</span><strong className="mt-1 block text-xl">{value}</strong></div>}
 function PrivacyPanel(){return <div className="grid gap-4 lg:grid-cols-3">{[[LockKeyhole,'ENCRYPTED DEAL','Players contribute encrypted entropy. Hole-card handles receive wallet-specific ACL grants.'],[EyeOff,'NO SIDE CHANNELS','Card values never appear in events, transaction logs, or public plaintext storage.'],[ShieldCheck,'VERIFIED REVEAL','Street and showdown reveals require threshold-network signatures verified by CoFHE.']].map(([Icon,t,b])=><div key={String(t)} className="border-3 border-ink bg-white p-6 shadow-hard"><Icon className="size-10 text-purple"/><h3 className="mt-8 text-xl font-black">{String(t)}</h3><p className="mt-3 font-semibold leading-relaxed text-ink/65">{String(b)}</p></div>)}</div>}
 
-function GameTable({id,address,close,transact,busy}:{id:bigint,address?:`0x${string}`,close:()=>void,busy:boolean,transact:(name:'joinTable'|'leaveTable'|'startHand'|'act'|'forceTimeoutFold'|'abortStalledHand',args:readonly unknown[])=>void}){
+function GameTable({id,address,close,transact,busy,notify}:{id:bigint,address?:`0x${string}`,close:()=>void,busy:boolean,notify:(notice:TransactionFeedback)=>void,transact:(name:'joinTable'|'leaveTable'|'startHand'|'act'|'forceTimeoutFold'|'abortStalledHand',args:readonly unknown[])=>void}){
   const [privateHand,setPrivateHand]=useState<{key:string;cards:number[]}|null>(null);
   const [inviteStatus,setInviteStatus]=useState('');
   const [privacyStatus,setPrivacyStatus]=useState('');
@@ -222,8 +219,8 @@ function GameTable({id,address,close,transact,busy}:{id:bigint,address?:`0x${str
   const [soundOn,setSoundOn]=useState(false);
   const [now,setNow]=useState(0);
   const privateLock=useRef(false);const [privateLocked,setPrivateLocked]=useState(false);
-  const publicClient=usePublicClient(); const {data:walletClient}=useWalletClient(); const {writeContractAsync:writePrivate,data:privateTxHash,isPending:privatePending,error:privateError}=useWriteContract();
-  const {isLoading:privateConfirming,isSuccess:privateSuccess}=useWaitForTransactionReceipt({hash:privateTxHash});
+  const publicClient=usePublicClient(); const {data:walletClient}=useWalletClient(); const {writeContractAsync:writePrivate}=useWriteContract();
+  const privateSubmittedHash=useRef<`0x${string}`|undefined>(undefined);
   const {data:view,refetch:refetchView} = useReadContract({address:POKER_ADDRESS,abi:fheBluffAbi,functionName:'getTableView',args:[id],query:{refetchInterval:5000}});
   const {data:seatData,refetch:refetchSeats} = useReadContract({address:POKER_ADDRESS,abi:fheBluffAbi,functionName:'getSeats',args:[id],query:{refetchInterval:5000}});
   const {data:community,refetch:refetchCommunity} = useReadContract({address:POKER_ADDRESS,abi:fheBluffAbi,functionName:'getCommunityCards',args:[id],query:{refetchInterval:5000}});
@@ -255,7 +252,7 @@ function GameTable({id,address,close,transact,busy}:{id:bigint,address?:`0x${str
   const needsBoardReveal=expectedBoard>revealed;
   const allInRunout=seats ? seats[3].every(state=>state!==0) : false;
   const revealLabel=allInRunout?'RUN OUT BOARD':phase===3?'REVEAL FLOP':phase===4?'REVEAL TURN':'REVEAL RIVER';
-  const privateBusy=privateLocked||privatePending||privateConfirming;
+  const privateBusy=privateLocked;
   const seatCredits=(seatCreditData||[]).map(entry=>entry.status==='success'?number(entry.result as bigint):0);
   const secondsLeft=Math.max(0,number(table?.[10])-now);
   const clockPercent=Math.min(100,(secondsLeft/120)*100);
@@ -266,12 +263,32 @@ function GameTable({id,address,close,transact,busy}:{id:bigint,address?:`0x${str
   const playTone=(frequency=440)=>{if(!soundOn||typeof window==='undefined')return;const AudioContextClass=window.AudioContext||(window as typeof window&{webkitAudioContext?:typeof AudioContext}).webkitAudioContext;if(!AudioContextClass)return;const audio=new AudioContextClass();const oscillator=audio.createOscillator();const gain=audio.createGain();oscillator.frequency.value=frequency;gain.gain.setValueAtTime(.06,audio.currentTime);gain.gain.exponentialRampToValueAtTime(.001,audio.currentTime+.12);oscillator.connect(gain);gain.connect(audio.destination);oscillator.start();oscillator.stop(audio.currentTime+.12);oscillator.onended=()=>void audio.close();};
   const makeMove=(action:number,amount=0n)=>{if(busy||privateBusy)return;playTone(action===ACTIONS.ALL_IN?720:action===ACTIONS.RAISE?620:420);transact('act',[id,action,amount]);};
   const connectCofhe=async()=>{if(!publicClient||!walletClient)throw new Error('Connect a wallet first');await cofheClient.connect(publicClient as never,walletClient as never);};
-  const runPrivateTask=async(task:()=>Promise<void>)=>{if(busy||privateLock.current)return;privateLock.current=true;setPrivateLocked(true);try{await task();}finally{privateLock.current=false;setPrivateLocked(false);}};
-  const freshPrivateWrite=async(request:Parameters<typeof writePrivate>[0])=>{if(!publicClient||!address)throw new Error('Network client unavailable');await publicClient.simulateContract({...request,account:address} as never);const fees=await publicClient.estimateFeesPerGas({type:'eip1559'});setPrivacyStatus('Check your wallet to continue.');const hash=await writePrivate({...request,maxFeePerGas:fees.maxFeePerGas*2n,maxPriorityFeePerGas:fees.maxPriorityFeePerGas} as never);setPrivacyStatus('Confirming on Arbitrum Sepolia…');const receipt=await publicClient.waitForTransactionReceipt({hash});if(receipt.status!=='success')throw new Error('Transaction reverted');await Promise.all([refetchView(),refetchSeats(),refetchCommunity(),refetchShuffle(),refetchEntropy()]);};
-  const advanceEncryptedShuffle=()=>void runPrivateTask(async()=>{try{setPrivacyStatus('Preparing the next private deal batch…');await freshPrivateWrite({address:POKER_ADDRESS,abi:fheBluffAbi,functionName:'advanceShuffle',args:[id,4]});setPrivacyStatus('Deal batch confirmed.');}catch(e){setPrivacyStatus(friendlyError(e));}});
-  const submitEncryptedEntropy=()=>void runPrivateTask(async()=>{try{setPrivacyStatus('Generating private entropy and ZK proof…');await connectCofhe();const words=new BigUint64Array(2);crypto.getRandomValues(words);const entropy=(words[0]<<64n)|words[1];const [handle,proof]=await cofheClient.encryptInputs([Encryptable.uint128(entropy)]).setConsumingContract(POKER_ADDRESS).execute();await freshPrivateWrite({address:POKER_ADDRESS,abi:fheBluffAbi,functionName:'submitEntropy',args:[id,handle,proof]});setPrivacyStatus('Private entropy confirmed.');}catch(e){setPrivacyStatus(friendlyError(e));}});
-  const decryptMine=()=>void runPrivateTask(async()=>{try{setPrivacyStatus('Authorizing your card-only ACP…');await connectCofhe();await cofheClient.acp.getOrCreateSelfACP();const handles=await publicClient!.readContract({address:POKER_ADDRESS,abi:fheBluffAbi,functionName:'getMyHoleCards',args:[id],account:address});const cards=await Promise.all(handles.map(h=>cofheClient.decryptForView(h,FheTypes.Uint8).execute()));setPrivateHand({key:cardContext,cards:cards.map(Number)});setPrivacyStatus('Cards decrypted locally. They were not published onchain.');}catch(e){setPrivacyStatus(friendlyError(e));}});
-  const publishReveal=(showdown=false)=>void runPrivateTask(async()=>{try{setPrivacyStatus('Requesting threshold-signed reveal…');await connectCofhe();const functionName=showdown?'getShowdownHandles':'getCommunityHandles';const handles=await publicClient!.readContract({address:POKER_ADDRESS,abi:fheBluffAbi,functionName,args:[id]}) as readonly `0x${string}`[];const revealed=await Promise.all(handles.map(h=>cofheClient.decryptForTx(h).withoutACP().execute()));await freshPrivateWrite({address:POKER_ADDRESS,abi:fheBluffAbi,functionName:showdown?'settleShowdown':'publishCommunity',args:[id,revealed.map(x=>Number(x.decryptedValue)),revealed.map(x=>x.signature)]} as never);setPrivacyStatus(showdown?'Hand settled.':'Board revealed.');}catch(e){setPrivacyStatus(friendlyError(e));}});
+  const runPrivateTask=async(task:()=>Promise<void>)=>{
+    if(busy||privateLock.current)return;
+    privateLock.current=true;privateSubmittedHash.current=undefined;setPrivateLocked(true);
+    notify({kind:'pending',title:'Preparing your move',message:'Working on your private cards. A wallet request may follow.'});
+    try{await task();}catch(error){const feedback=transactionError(error,privateSubmittedHash.current);setPrivacyStatus(feedback.message);notify(feedback);}
+    finally{privateLock.current=false;setPrivateLocked(false);}
+  };
+  const freshPrivateWrite=async(request:Parameters<typeof writePrivate>[0])=>{
+    if(!publicClient||!address)throw new Error('Network client unavailable');
+    await publicClient.simulateContract({...request,account:address} as never);
+    const fees=await publicClient.estimateFeesPerGas({type:'eip1559'});
+    setPrivacyStatus('Check your wallet to continue.');
+    notify({kind:'pending',title:'Your wallet is ready',message:'Open your wallet to approve or cancel this request.'});
+    const hash=await writePrivate({...request,maxFeePerGas:fees.maxFeePerGas*2n,maxPriorityFeePerGas:fees.maxPriorityFeePerGas} as never);
+    privateSubmittedHash.current=hash;
+    setPrivacyStatus('Confirming on Arbitrum Sepolia…');
+    notify({kind:'pending',title:'Move sent',message:'Waiting for confirmation on Arbitrum Sepolia.',hash});
+    const receipt=await publicClient.waitForTransactionReceipt({hash});
+    if(receipt.status!=='success')throw new Error('Transaction reverted');
+    notify({kind:'success',title:'Move confirmed',message:'Your action is confirmed onchain.',hash});
+    await Promise.allSettled([refetchView(),refetchSeats(),refetchCommunity(),refetchShuffle(),refetchEntropy()]);
+  };
+  const advanceEncryptedShuffle=()=>void runPrivateTask(async()=>{setPrivacyStatus('Preparing the next private deal batch…');await freshPrivateWrite({address:POKER_ADDRESS,abi:fheBluffAbi,functionName:'advanceShuffle',args:[id,4]});setPrivacyStatus('Deal batch confirmed.');});
+  const submitEncryptedEntropy=()=>void runPrivateTask(async()=>{setPrivacyStatus('Generating private entropy and ZK proof…');await connectCofhe();const words=new BigUint64Array(2);crypto.getRandomValues(words);const entropy=(words[0]<<64n)|words[1];const [handle,proof]=await cofheClient.encryptInputs([Encryptable.uint128(entropy)]).setConsumingContract(POKER_ADDRESS).execute();await freshPrivateWrite({address:POKER_ADDRESS,abi:fheBluffAbi,functionName:'submitEntropy',args:[id,handle,proof]});setPrivacyStatus('Private entropy confirmed.');});
+  const decryptMine=()=>void runPrivateTask(async()=>{setPrivacyStatus('Authorizing your card-only ACP…');await connectCofhe();await cofheClient.acp.getOrCreateSelfACP();const handles=await publicClient!.readContract({address:POKER_ADDRESS,abi:fheBluffAbi,functionName:'getMyHoleCards',args:[id],account:address});const cards=await Promise.all(handles.map(h=>cofheClient.decryptForView(h,FheTypes.Uint8).execute()));setPrivateHand({key:cardContext,cards:cards.map(Number)});setPrivacyStatus('Cards decrypted locally. They were not published onchain.');notify({kind:'success',title:'Your cards are ready',message:'Only your own hole cards were decrypted locally. No transaction was sent.'});});
+  const publishReveal=(showdown=false)=>void runPrivateTask(async()=>{setPrivacyStatus('Requesting threshold-signed reveal…');await connectCofhe();const functionName=showdown?'getShowdownHandles':'getCommunityHandles';const handles=await publicClient!.readContract({address:POKER_ADDRESS,abi:fheBluffAbi,functionName,args:[id]}) as readonly `0x${string}`[];const revealed=await Promise.all(handles.map(h=>cofheClient.decryptForTx(h).withoutACP().execute()));await freshPrivateWrite({address:POKER_ADDRESS,abi:fheBluffAbi,functionName:showdown?'settleShowdown':'publishCommunity',args:[id,revealed.map(x=>Number(x.decryptedValue)),revealed.map(x=>x.signature)]} as never);setPrivacyStatus(showdown?'Hand settled.':'Board revealed.');});
   return <div className="fixed inset-0 z-50 overflow-y-auto bg-[#191917] text-white"><header className="sticky top-0 z-20 flex items-center justify-between border-b-3 border-white/25 bg-ink px-3 py-3 sm:px-6"><button onClick={close} className="flex items-center gap-2 font-black"><ArrowLeft/> LOBBY</button><div className="text-center"><p className="font-mono text-[10px] text-acid">TABLE #{id.toString()}</p><p className="font-black">{stage}</p></div><div className="border-2 border-acid px-3 py-2 font-mono text-xs">POT {number(table?.[7])}</div></header><div className="mx-auto grid min-h-[calc(100vh-68px)] max-w-7xl grid-rows-[auto_1fr_auto] gap-4 p-3 pb-28 sm:p-6">
     <TableGuide phase={phase} seated={me>=0} host={address?.toLowerCase()===table?.[0].toLowerCase()} players={number(table?.[4])} submitted={!!entropySubmitted} batches={shuffleBatches} myTurn={isMyTurn} due={Math.min(number(seats?.[1][me]),Math.max(0,number(table?.[8])-number(seats?.[2][me])))} boardPending={needsBoardReveal} folded={seats?.[3][me]===1} allIn={seats?.[3][me]===2} busy={busy||privateBusy}/>
     <div><div className="mb-2 grid grid-cols-5 border-2 border-white/25 text-center font-mono text-[8px] font-black sm:text-[10px]">{['PREFLOP','FLOP','TURN','RIVER','SHOWDOWN'].map((label,index)=><span key={label} className={`border-r border-white/20 px-1 py-2 last:border-r-0 ${phase===index+2?'bg-acid text-ink':phase>index+2?'bg-green text-ink':'text-white/40'}`}>{phase>index+2?'✓ ':''}{label}</span>)}</div><div className="grid grid-cols-4 gap-2 text-center"><Stat label="CURRENT BET" value={number(table?.[8])}/><Stat label="YOUR STACK" value={me>=0?number(seats?.[1][me]):0}/><Stat label="HAND" value={`#${number(table?.[6])}`}/><Stat label="CLOCK" value={phase>=2&&phase<=6&&number(table?.[10])>0?`${secondsLeft}s`:'—'}/></div>{phase>=2&&phase<=6&&number(table?.[10])>0&&<div className="h-1 bg-white/15"><div className={`h-full transition-all ${secondsLeft<30?'bg-pink':'bg-acid'}`} style={{width:`${clockPercent}%`}}/></div>}</div>
@@ -291,7 +308,7 @@ function GameTable({id,address,close,transact,busy}:{id:bigint,address?:`0x${str
     <div className="z-20 border-3 sm:sticky border-ink bg-cream p-3 text-ink shadow-hard sm:bottom-3">
       {phase===8?<div className="mb-3 border-3 border-ink bg-white p-4"><p className="font-heading text-2xl">ARCHIVED TABLE</p><p className="mt-1 text-sm font-semibold text-ink/65">The final player left, permanently closing this table. No wallet transaction is required here.</p></div>:<div className="mb-3 flex items-center justify-between">
         <div className="flex gap-2"><PlayingCard value={privateCards[0]} hidden={privateCards.length===0}/><PlayingCard value={privateCards[1]} hidden={privateCards.length===0}/></div>
-        <div className="max-w-[60%] text-right"><p className="font-mono text-[10px] font-bold">PRIVATE HAND</p><p className="text-xs font-semibold text-purple"><LockKeyhole className="inline size-3"/> {privateCards.length?'DECRYPTED LOCALLY':'ACP LOCKED'}</p>{insight&&<p className="mt-1 inline-flex items-center gap-1 border-2 border-ink bg-acid px-2 py-1 text-[9px] font-black"><Target className="size-3"/>{insight}</p>}<p className="mt-1 truncate text-[10px] font-bold text-ink/55">{privateError?'Transaction failed':privateConfirming?'Confirming onchain…':privatePending?'Check your wallet…':privacyStatus||(privateSuccess?'Transaction confirmed.':'')}</p></div>
+        <div className="max-w-[60%] text-right"><p className="font-mono text-[10px] font-bold">PRIVATE HAND</p><p className="text-xs font-semibold text-purple"><LockKeyhole className="inline size-3"/> {privateCards.length?'DECRYPTED LOCALLY':'ACP LOCKED'}</p>{insight&&<p className="mt-1 inline-flex items-center gap-1 border-2 border-ink bg-acid px-2 py-1 text-[9px] font-black"><Target className="size-3"/>{insight}</p>}<p className="mt-1 text-xs font-bold leading-relaxed text-ink/55">{privacyStatus}</p></div>
       </div>}
       {(phase===0||phase===7)&&<div className="mb-3"><button onClick={inviteFriend} className="min-h-11 border-2 border-ink bg-white px-3 text-sm font-black">Copy friend invite</button>{inviteStatus&&<output className="mt-1 block break-all text-xs">{inviteStatus}</output>}</div>}
       <fieldset disabled={busy||privateBusy} className="min-w-0 disabled:opacity-60">
