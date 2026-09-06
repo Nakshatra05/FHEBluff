@@ -125,6 +125,10 @@ node --test test/practice-poker.test.mjs
 
 ## Privacy and operational notes
 
+- The poker table and compact controls stay in normal document flow, so expanded raise/help panels cannot cover the table. Help starts collapsed; touch actions remain at least 44px high.
+- Card viewing automatically starts after dealing when a valid, wallet-matching self-ACP scoped to this poker contract is already stored. Background loading never creates a permission or opens a signature request. New permissions still require the player's explicit action.
+- A mined deal is not proof that the offchain CoFHE computation has finished. The card status distinguishes preparation from queued decryption; local waiting is bounded and can be stopped without locking betting controls. This improves avoidable client latency, not the network coprocessor's speed.
+
 - Never log decrypted cards, encryption inputs, proofs, or ACP private material.
 - ACP self-permissions are created by the player client; only the player receives ACL access to their hole-card handles.
 - An RPC caller may spoof the `from` field on a view call and retrieve an opaque handle, but cannot decrypt it without the separately enforced CoFHE ACL permission.

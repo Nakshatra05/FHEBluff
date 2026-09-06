@@ -4,6 +4,21 @@ import {decodeFunctionData} from 'viem';
 import {buildDealCalls,shuffleAbi,DEAL_ROUTER} from '../lib/deal-batch.ts';
 import {isOpenTable,recoveryAction} from '../lib/table-lifecycle.ts';
 import {withDeadline} from '../lib/async-deadline.ts';
+import {readFileSync} from 'node:fs';
+
+test('table controls remain in document flow and background cards cannot request new permission',()=>{
+  const page=readFileSync(new URL('../app/play/page.tsx',import.meta.url),'utf8');
+  const css=readFileSync(new URL('../app/globals.css',import.meta.url),'utf8');
+  const view=readFileSync(new URL('../components/poker/use-private-cards.ts',import.meta.url),'utf8');
+  assert.match(page,/aria-label="Poker table"/);
+  assert.match(page,/aria-label="Game controls" className="poker-controls/);
+  assert.match(css,/\.poker-controls \{ position:static;/);
+  assert.doesNotMatch(page,/sm:sticky/);
+  assert.match(view,/if\(silent&&\(!cached\|\|autoStarted.current===key\)\)return/);
+  assert.ok(view.indexOf('if(silent&&')<view.indexOf('authorizeCardView(client,address)'));
+  assert.match(view,/stored.issuer.toLowerCase\(\)===address.toLowerCase\(\)/);
+  assert.match(view,/stored.contracts.some/);
+});
 
 test('combines every 2–6 seat deal without exceeding per-call batch limits',()=>{
   const poker='0x'+'1'.repeat(40);

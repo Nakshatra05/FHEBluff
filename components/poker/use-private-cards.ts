@@ -1,8 +1,9 @@
 'use client';
 
-import {useEffect,useRef,useState} from 'react';
+import {useCallback,useEffect,useRef,useState} from 'react';
 import {usePublicClient,useWalletClient} from 'wagmi';
 import {FheTypes} from '@cofhe/sdk';
+import {ValidationUtils} from '@cofhe/sdk/acps';
 import {authorizeCardView,createCardViewClient} from '@/lib/cofhe-client';
 import {POKER_ADDRESS,ARBITRUM_SEPOLIA_CHAIN_ID} from '@/lib/network';
 import {fheBluffAbi} from '@/lib/fhebluff-abi';
@@ -14,31 +15,37 @@ export function usePrivateCards(id:bigint,handId:bigint|undefined,address:`0x${s
   const key=`${id}:${handId}:${address?.toLowerCase()}:${walletClient?.chain.id}`;
   const [state,setState]=useState<ViewState|null>(null);
   const request=useRef<{key:string;cancelled:boolean}|null>(null);
+  const autoStarted=useRef('');
   const [elapsed,setElapsed]=useState(0);
   useEffect(()=>()=>{if(request.current){request.current.cancelled=true;request.current=null;}},[key,enabled]);
   const view=state?.key===key?state:null;
   const busy=view?.stage==='authorizing'||view?.stage==='decrypting';
   const startedAt=view?.started;
   useEffect(()=>{if(!busy||!startedAt)return;const tick=()=>setElapsed(Math.floor((Date.now()-startedAt)/1000));tick();const timer=setInterval(tick,1000);return()=>clearInterval(timer);},[busy,startedAt]);
-  const load=async()=>{
+  const load=useCallback(async(silent=false)=>{
     if(request.current||!enabled||!address||!publicClient||!walletClient||walletClient.chain.id!==ARBITRUM_SEPOLIA_CHAIN_ID||walletClient.account.address.toLowerCase()!==address.toLowerCase())return;
+    const client=createCardViewClient();
+    const stored=client.acp.getActiveACP(ARBITRUM_SEPOLIA_CHAIN_ID,address);
+    const cached=stored?.type==='self'&&stored.issuer.toLowerCase()===address.toLowerCase()&&stored.contracts.some(contract=>contract.toLowerCase()===POKER_ADDRESS.toLowerCase())&&ValidationUtils.isValid(stored).valid?stored:undefined;
+    // Background loading must never trigger a signature request.
+    if(silent&&(!cached||autoStarted.current===key))return;
+    autoStarted.current=key;
     const run={key,cancelled:false};request.current=run;
+    const started=Date.now();
     const current=()=>request.current===run&&!run.cancelled;
     const update=(stage:ViewState['stage'],message:string,cards:number[]=[])=>{if(current())setState({key,stage,message,cards,started});};
-    const started=Date.now();
-    update('authorizing','Sign the card-view permission in your wallet if asked. This is a message signature, not a gas transaction.');
+    update(cached?'decrypting':'authorizing',cached?'Loading your cards automatically with your existing permission.':'Sign the card-view permission in your wallet if asked. No gas transaction.');
     try{
-      const client=createCardViewClient();
       await withDeadline(client.connect(publicClient as never,walletClient as never),15000);
       if(!current())return;
-      const acp=await withDeadline(authorizeCardView(client,address),60000);
+      const acp=cached??await withDeadline(authorizeCardView(client,address),60000);
       if(!current())return;
       update('decrypting','Permission ready. Waiting for CoFHE to unlock your cards; no further wallet confirmation is needed.');
       const decrypt=async()=>{
         const handles=await publicClient.readContract({address:POKER_ADDRESS,abi:fheBluffAbi,functionName:'getMyHoleCards',args:[id],account:address});
         if(!current())throw new Error('View stopped');
         if(handles.some(handle=>/^0x0+$/.test(handle)))throw new Error('Cards not ready');
-        return Promise.all(handles.map(handle=>client.decryptForView(handle,FheTypes.Uint8).withACP(acp).set404RetryTimeout(30000).onPoll(()=>{if(!current())throw new Error('View stopped');}).execute()));
+        return Promise.all(handles.map(handle=>client.decryptForView(handle,FheTypes.Uint8).withACP(acp).set404RetryTimeout(30000).onPoll(({requestId})=>{if(!current())throw new Error('View stopped');update('decrypting',requestId?'Secure decryption is queued with CoFHE. No extra signature needed.':'CoFHE is still preparing the encrypted deal. Cards appear here when ready.');}).execute()));
       };
       const values=await withDeadline(decrypt(),90000);
       if(!current())return;
@@ -50,7 +57,8 @@ export function usePrivateCards(id:bigint,handId:bigint|undefined,address:`0x${s
       const rejected=error instanceof Error&&/reject|denied|cancel/i.test(error.message);
       update('error',rejected?'Permission declined. Press Show my cards when you’re ready.':'Card viewing timed out. Finish or cancel any open wallet signature first, then retry. No poker transaction was sent.');
     }finally{run.cancelled=true;if(request.current===run)request.current=null;}
-  };
+  },[address,enabled,id,key,publicClient,walletClient]);
+  useEffect(()=>{if(!enabled)return;const first=setTimeout(()=>void load(true),0);const afterStoreHydrates=setTimeout(()=>void load(true),2000);return()=>{clearTimeout(first);clearTimeout(afterStoreHydrates);};},[enabled,load]);
   const stop=()=>{
     // Do not offer a second signature while an un-cancellable wallet prompt is open.
     if(view?.stage!=='decrypting')return;
