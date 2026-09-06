@@ -38,3 +38,14 @@ test('wallet header opens a menu instead of logging out immediately',()=>{
   assert.match(menu,/Copy wallet address/);assert.match(menu,/My profile &amp; Credits|My profile & Credits/);
   assert.doesNotMatch(page,/<button onClick=\{\(\)=>logout\(\)\}/);
 });
+test('app-owned overlays and selected table presets share the theme',()=>{
+  const page=readFileSync(new URL('../app/play/page.tsx',import.meta.url),'utf8');
+  const menu=readFileSync(new URL('../components/poker/wallet-menu.tsx',import.meta.url),'utf8');
+  const css=readFileSync(new URL('../app/globals.css',import.meta.url),'utf8');
+  assert.match(page,/<DialogContent className="neo-dialog/);
+  assert.match(menu,/className="neo-menu/);
+  assert.match(page,/aria-pressed=\{maxPlayers===preset.players/);
+  assert.match(page,/Full wallet address/);
+  assert.match(css,/\.neo-dialog \{ border-radius:0/);
+  assert.match(css,/\.neo-menu \{ border-radius:0/);
+});

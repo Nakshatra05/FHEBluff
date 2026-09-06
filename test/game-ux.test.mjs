@@ -5,6 +5,13 @@ import {buildDealCalls,shuffleAbi,DEAL_ROUTER} from '../lib/deal-batch.ts';
 import {isOpenTable,recoveryAction} from '../lib/table-lifecycle.ts';
 import {withDeadline} from '../lib/async-deadline.ts';
 import {readFileSync} from 'node:fs';
+import {competitionRank} from '../lib/reputation.ts';
+
+test('equal Credit totals share a competition rank, regardless of list order',()=>{
+  const totals=[2n,5n,2n,0n];
+  assert.deepEqual(totals.map(score=>competitionRank(score,totals)),[2,1,2,4]);
+  assert.equal(competitionRank(9007199254740993n,[9007199254740994n,9007199254740993n]),2);
+});
 
 test('table controls remain in document flow and background cards cannot request new permission',()=>{
   const page=readFileSync(new URL('../app/play/page.tsx',import.meta.url),'utf8');
