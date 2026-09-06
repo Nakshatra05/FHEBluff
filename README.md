@@ -29,7 +29,7 @@ The project separates the frontend, contract interface, encryption client, and S
 
 1. Every active player creates 128 bits of entropy locally and encrypts it with `@cofhe/sdk`. The proof is bound to the FHEBluff contract with `setConsumingContract`.
 2. The contract verifies each external encrypted input and XORs all player contributions with CoFHE encrypted randomness.
-3. Ordered Floyd sampling generates only the 9–17 unique cards a hand can actually use, then inserts each at an encrypted random position. The work is processed in batches of four, cutting a heads-up deal from 26 shuffle confirmations to at most three without weakening card uniqueness or deal-order privacy.
+3. Ordered Floyd sampling generates only the 9–17 unique cards a hand can actually use, then inserts each at an encrypted random position. The contract processes at most four cards per call. **Deal all cards** combines the remaining calls into one atomic Multicall3 transaction, with simulation before signing. The smaller-batch option remains available when the RPC or gas estimate cannot handle the combined transaction. This reduces wallet confirmations, not the underlying CoFHE computation time.
 4. The contract grants `FHE.allow` access to each player for only that player's two ciphertext handles. The frontend obtains a self ACP and decrypts those handles locally with `decryptForView`.
 5. Community cards become public only when their street is reached. At showdown, active players' cards are deliberately published through CoFHE threshold-signed `decryptForTx` results so the contract can evaluate and settle the hand. Folded hands are never revealed.
 
@@ -92,6 +92,30 @@ Hardhat uses the official CoFHE Arbitrum Sepolia preset. Contract tests run agai
 - Multiplayer has a contextual next-step guide. Check/call and fold are the primary controls; raise presets and all-in are under “Bet more”. Moves are simulated before a signing request, buttons lock while a request is processing, and errors use plain language. CoFHE deal and reveal transactions still require explicit wallet confirmations.
 - The lobby shows the wins needed to surpass the next higher Credit total using current leaderboard scores. Credits remain contract-awarded: +1 for every winning player of a completed hand, including tied winners. There are no practice, participation, or self-claim Credit bonuses. This is an all-time Credit ranking, not a skill/Elo rating.
 - Locally decrypted live hole cards are scoped to table, hand, and wallet before display. They are not used by the practice opponent or persisted in browser storage.
+
+### Deal, card viewing, music, and hand outcomes
+
+- **One-confirmation deal:** uses the canonical Arbitrum Sepolia Multicall3 at `0xcA11bde05977b3631167028862bE2a173976CA11`. Only permissionless `advanceShuffle` calls are batched; never player actions or entropy submissions, whose `msg.sender` must remain the player. Every subcall uses `allowFailure: false`, no ETH value is sent to the router, and no token approvals are requested. The poker contract and Credits are unchanged. A stale batch safely reverts if someone else finishes the deal first.
+- **Card viewing is not a poker transaction.** It uses an ACP message signature (reused when valid), followed by CoFHE offchain decryption. Onchain transaction confirmation does not imply that the encrypted computation has finished. Viewing runs independently of betting, shows elapsed time, and permits stopping a decrypt wait. Connection/signature/decryption UI waits have explicit bounds; late results are discarded. A pending signature is reused rather than opening duplicate wallet requests. New ACPs are contract-scoped; existing owner ACLs still govern every ciphertext.
+- **Music** is an original synthesized loop, started only by pressing Music off/on. It pauses when the document is hidden and stops when the table closes. No audio download or third-party service is required.
+- **Open tables** contains only seating-phase tables with room. Full tables are under Active hands. Settled hands are under **History**, with receipts and an Open / Rematch button. Empty, permanently closed tables no longer have a separate abandoned-table section.
+- **Timeout outcomes:** an undealt hand can be closed with zero chip change and no Credits (`HandAborted` on the existing contract, presented as No contest). During betting, the timed-out active player folds; the last player wins or play continues. Pending board reveals and all-in players are never offered timeout-fold by the UI. Showdown still requires valid CoFHE reveals; no arbitrary clock-based winner is invented.
+- **Operational limit:** blockchains do not execute timers autonomously. A player or spectator must confirm the permissionless recovery/reveal transaction. This release does not add a funded keeper, alter the deployed timeout rules, or guarantee settlement during a CoFHE outage. The existing contract is not upgradeable; its onchain enum still calls an empty table `Abandoned`.
+
+Regression checks:
+
+```bash
+node --test test/game-ux.test.mjs test/transaction-feedback.test.mjs test/practice-poker.test.mjs
+npm run contracts:test
+```
+
+Read-only batch simulation against a historical ready-to-deal hand (Node 24+; no keys or transactions):
+
+```bash
+DOTENV_CONFIG_PATH=.env.local node scripts/check-deal-batch.mjs 5
+```
+
+The table #5 nine-card deal passed this simulation at Arbitrum Sepolia block `306040057`. Local CoFHE mock tests additionally verify batch rollback, owner-only decryption, timeout settlement, chip conservation, and no duplicate Credits. A historical simulation is not a claim that every larger table fits the current network gas limit.
 
 Run practice engine checks with Node.js 24 or newer:
 

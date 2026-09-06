@@ -160,4 +160,33 @@ describe('FHEBluff', function () {
     expect((await game.leaderboard(10))[0].length).to.be.greaterThan(0);
     await expect(game.settleShowdown(0, values, signatures)).to.be.revertedWithCustomError(game, 'InvalidPhase');
   });
+
+  it('deals in one atomic batch, preserves card ACLs, and settles an expired turn', async function () {
+    const [host, guest, outsider] = await hre.ethers.getSigners();
+    const game = await (await hre.ethers.getContractFactory('FHEBluff')).deploy();
+    const router = await (await hre.ethers.getContractFactory('DealBatchHarness')).deploy();
+    await game.createTable(2,5,500);
+    await game.joinTable(0,500);await game.connect(guest).joinTable(0,500);await game.startHand(0);
+    const clients=[];
+    for(const player of [host,guest]){
+      const client=await hre.cofhe.createClientWithBatteries(player);clients.push(client);
+      const [handle,proof]=await client.encryptInputs([Encryptable.uint128(BigInt(clients.length))]).setConsumingContract(await game.getAddress()).execute();
+      await game.connect(player).submitEntropy(0,handle,proof);
+    }
+    const calls=[4,4,1].map(steps=>({target:game.target,allowFailure:false,callData:game.interface.encodeFunctionData('advanceShuffle',[0,steps])}));
+    await expect(router.aggregate3([...calls,calls[0]],{gasLimit:100000000})).to.be.reverted;
+    expect(await game.getShuffleProgress(0)).to.equal(9n); // Whole failed batch rolls back.
+    await router.connect(outsider).aggregate3(calls,{gasLimit:100000000});
+    expect((await game.getTableView(0))[5]).to.equal(2n);
+    const hole=await game.getMyHoleCards(0);
+    expect(await clients[0].decryptForView(hole[0],FheTypes.Uint8).execute()).to.be.lessThan(52n);
+    await expect(clients[1].decryptForView(hole[0],FheTypes.Uint8).execute()).to.be.rejected;
+    await expect(game.forceTimeoutFold(0)).to.be.revertedWith('not timed out');
+    await hre.network.provider.send('evm_increaseTime',[121]);await hre.network.provider.send('evm_mine');
+    await game.connect(outsider).forceTimeoutFold(0);
+    expect((await game.getTableView(0))[5]).to.equal(7n);
+    const seats=await game.getSeats(0);expect(seats[1].reduce((a,b)=>a+b,0n)).to.equal(1000n);
+    expect((await game.credits(host.address))+(await game.credits(guest.address))).to.equal(1n);
+    await expect(game.forceTimeoutFold(0)).to.be.revertedWithCustomError(game,'InvalidPhase');
+  });
 });
