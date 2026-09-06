@@ -125,6 +125,9 @@ node --test test/practice-poker.test.mjs
 
 ## Privacy and operational notes
 
+- The lobby offers two immediate paths: wallet-free practice or multiplayer tables. Learning help and community statistics are collapsed by default. Desktop tabs and mobile navigation expose the same six views.
+- The wallet address opens an explicit profile/copy/logout menu; merely clicking the address no longer disconnects the player. Table cards distinguish free starting chips from the current pot and indicate occupied seats.
+
 - The poker table and compact controls stay in normal document flow, so expanded raise/help panels cannot cover the table. Help starts collapsed; touch actions remain at least 44px high.
 - Card viewing automatically starts after dealing when a valid, wallet-matching self-ACP scoped to this poker contract is already stored. Background loading never creates a permission or opens a signature request. New permissions still require the player's explicit action.
 - A mined deal is not proof that the offchain CoFHE computation has finished. The card status distinguishes preparation from queued decryption; local waiting is bounded and can be stopped without locking betting controls. This improves avoidable client latency, not the network coprocessor's speed.

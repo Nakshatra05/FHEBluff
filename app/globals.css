@@ -8,6 +8,12 @@
 }
 
 :root { --background:#fff8df; --foreground:#11100f; }
+.launch-choice { display:flex; align-items:center; gap:14px; min-height:94px; padding:18px; border:3px solid #11100f; text-align:left; box-shadow:4px 4px 0 #11100f; transition:transform .15s; }
+.launch-choice:hover { transform:translateY(-2px); }
+.launch-choice > span:nth-child(2) { flex:1; }
+.launch-choice strong { display:block; font-size:20px; }
+.launch-choice small { display:block; margin-top:4px; font-size:12px; opacity:.75; }
+button:focus-visible,summary:focus-visible,a:focus-visible { outline:3px solid #6647f5; outline-offset:4px; }
 * { box-sizing:border-box; }
 html { scroll-behavior:smooth; }
 body { margin:0; background:var(--background); color:var(--foreground); font-family:var(--font-sans-custom),sans-serif; }
